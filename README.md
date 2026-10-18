@@ -184,10 +184,32 @@ dart run flutter_launcher_icons
 
 That produces the five Android densities twice over (the legacy `mipmap` bitmap for
 pre-8.0 launchers and the `mipmap-anydpi-v26` adaptive icon), the full macOS
-`AppIcon.appiconset`, and nothing else. The adaptive icon uses the same picture as
-its foreground *and* its background, with the default 16% inset, so the launcher's
-rounded-square mask crops into more of the design rather than exposing a coloured
-corner behind it.
+`AppIcon.appiconset`, and nothing else.
+
+The adaptive icon has two settings worth understanding. The artwork is a badge on a
+perfectly flat `#010101` field occupying the central 93% of the square, so:
+
+- **`adaptive_icon_foreground_inset: 24`** — at the default of 16 the badge
+  measures ~68dp on the 108dp adaptive canvas, wider than Android's 66dp safe
+  zone, so the launcher's mask sliced the badge's rounded corners. 24 brings it to
+  ~52dp, inside any mask shape. Raise it to shrink the badge further; lower it to
+  let it fill more of the tile.
+- **`adaptive_icon_background: "#010101"`** — a flat colour rather than the
+  picture itself. Whatever the mask reveals beyond the badge is then the same
+  black the badge already sits on, so there is no visible seam regardless of which
+  launcher shape is in use.
+
+To re-measure after swapping in different artwork — and re-derive the two values
+above rather than inheriting them — run:
+
+```sh
+swift tool/icon_probe.swift assets/icon/printtender-icon.png
+```
+
+It reports the field colour, the flatness of the edges (a mean deviation near 0
+means the border is a solid colour, so a flat adaptive background is seamless;
+a large value means artwork runs to the edge and the picture itself is the safer
+background), and the bounding box of the content as a percentage of the square.
 
 ## How the due-date maths works
 

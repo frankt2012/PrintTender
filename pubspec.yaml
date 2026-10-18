@@ -107,9 +107,15 @@ flutter:
 
 # Generates every launcher icon from assets/icon/printtender-icon.png.
 #
-# The same picture is used as the adaptive-icon foreground *and* background so
-# that the launcher's rounded-square mask crops into more of the design rather
-# than exposing a coloured corner behind it. Regenerate with:
+# The artwork is a badge on a perfectly flat #010101 field, occupying the
+# central 93% of the square. At the default 16% foreground inset the badge
+# measures ~68dp on a 108dp adaptive canvas, which is wider than Android's
+# 66dp safe zone — so the launcher's mask was slicing the badge's rounded
+# corners. 24% inset brings it to ~52dp, comfortably inside any mask.
+#
+# The background is a flat colour matching the artwork's own field rather
+# than the picture itself, so whatever the mask reveals around the badge is
+# the same black the badge already sits on. Regenerate with:
 #   dart run flutter_launcher_icons
 flutter_launcher_icons:
   android: true
@@ -119,4 +125,5 @@ flutter_launcher_icons:
     image_path: "assets/icon/printtender-icon.png"
   image_path: "assets/icon/printtender-icon.png"
   adaptive_icon_foreground: "assets/icon/printtender-icon.png"
-  adaptive_icon_background: "assets/icon/printtender-icon.png"
+  adaptive_icon_background: "#010101"
+  adaptive_icon_foreground_inset: 24
