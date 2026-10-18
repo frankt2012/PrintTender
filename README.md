@@ -1,4 +1,4 @@
-# Printer Maintenance
+# PrintTender
 
 A local-first maintenance tracker for 3D printers. Runs as a **native macOS desktop
 app** and an **Android app** from a single Flutter codebase. All data lives in a
@@ -74,7 +74,7 @@ flutter run -d macos
 flutter build macos --release
 ```
 
-The built app appears under `build/macos/Build/Products/Release/`.
+The built app appears under `build/macos/Build/Products/Release/PrintTender.app`.
 
 ## Tests
 
@@ -155,7 +155,39 @@ lib/
       edit_printer_screen.dart    add / edit a printer
       add_log_entry_screen.dart   record maintenance
       task_definitions_screen.dart maintenance library CRUD
+assets/
+  icon/
+    printtender-icon.png         1024×1024 source for the icon generator
+    printtender-icon-source.jpg  the original artwork, kept as-is
 ```
+
+## Naming and icons
+
+The user-visible name is **PrintTender**. Three related identifiers deliberately
+do *not* follow it:
+
+- **Dart package name** — still `printer_maintenance`, so none of the ~40 imports
+  across `lib/` and `test/` need touching. Invisible to users.
+- **Android applicationId** — still `com.franktriolo.printer_maintenance`, and the
+  macOS bundle id is still `com.franktriolo.printerMaintenance`. Changing either
+  would make the OS treat a new build as a different app, discarding the installed
+  database on the phone.
+- **Backup file marker** — an exported snapshot carries `"app": "printer_maintenance"`.
+  That is how the importer recognises its own files; changing it would make every
+  backup already exported fail validation.
+
+Launcher icons are generated, never hand-edited. Edit the source image and run:
+
+```sh
+dart run flutter_launcher_icons
+```
+
+That produces the five Android densities twice over (the legacy `mipmap` bitmap for
+pre-8.0 launchers and the `mipmap-anydpi-v26` adaptive icon), the full macOS
+`AppIcon.appiconset`, and nothing else. The adaptive icon uses the same picture as
+its foreground *and* its background, with the default 16% inset, so the launcher's
+rounded-square mask crops into more of the design rather than exposing a coloured
+corner behind it.
 
 ## How the due-date maths works
 
