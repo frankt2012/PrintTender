@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Printer Maintenance Log</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0A7586">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Printer Log">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one service card per printer, each with a big print-hours odometer and a ruler-style gauge per task. */
+:root{
+  --bg:#E8EDF0;
+  --surface:#F6F9FA;
+  --surface-2:#DCE4E8;
+  --ink:#13202A;
+  --ink-soft:#4F616D;
+  --line:#C3CFD6;
+  --accent:#0A7586;
+  --accent-ink:#FFFFFF;
+  --gauge-track:#CFD9DE;
+  --ok:#1F7A4D;
+  --ok-bg:#D8EFE2;
+  --ok-fill:#2E9E68;
+  --warn:#8A5A00;
+  --warn-bg:#FBE9BE;
+  --warn-fill:#DDA21F;
+  --bad:#B3261E;
+  --bad-bg:#F9D9D5;
+  --bad-fill:#D2473D;
+  --font-display:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --font-body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1920;
+    --surface:#15252D;
+    --surface-2:#1C323C;
+    --ink:#E5EEF1;
+    --ink-soft:#97AAB5;
+    --line:#2A404A;
+    --accent:#4CC2D2;
+    --accent-ink:#04222A;
+    --gauge-track:#243A44;
+    --ok:#6FD39B;
+    --ok-bg:#183A2A;
+    --ok-fill:#3DB57C;
+    --warn:#F2C25B;
+    --warn-bg:#40330F;
+    --warn-fill:#E8B13A;
+    --bad:#FF8C83;
+    --bad-bg:#4A1F1C;
+    --bad-fill:#E5584D;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1920;
+  --surface:#15252D;
+  --surface-2:#1C323C;
+  --ink:#E5EEF1;
+  --ink-soft:#97AAB5;
+  --line:#2A404A;
+  --accent:#4CC2D2;
+  --accent-ink:#04222A;
+  --gauge-track:#243A44;
+  --ok:#6FD39B;
+  --ok-bg:#183A2A;
+  --ok-fill:#3DB57C;
+  --warn:#F2C25B;
+  --warn-bg:#40330F;
+  --warn-fill:#E8B13A;
+  --bad:#FF8C83;
+  --bad-bg:#4A1F1C;
+  --bad-fill:#E5584D;
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font:15px/1.5 var(--font-body);
+  padding-block:28px 64px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:1040px;margin:0 auto}
+button,input,select{font:inherit;color:inherit}
+
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.eyebrow{font:500 12px var(--font-mono);letter-spacing:.14em;color:var(--ink-soft);margin:0 0 6px}
+h1{font:700 clamp(34px,6vw,52px)/.95 var(--font-display);text-transform:uppercase;letter-spacing:.01em;margin:0;text-wrap:balance}
+h2{text-wrap:balance}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  font:600 13.5px/1.2 var(--font-body);
+  padding:9px 14px;border:1px solid var(--line);border-radius:4px;
+  background:transparent;color:var(--ink);cursor:pointer;
+}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.small{padding:6px 10px;font-size:13px}
+.btn.ghost{border-color:transparent;color:var(--ink-soft)}
+.btn.ghost:hover{color:var(--ink)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.danger.armed{background:var(--bad);color:var(--bg);border-color:var(--bad)}
+:is(.btn,input,select):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;align-items:baseline;gap:10px;min-width:0}
+.stat b{font:700 40px/1 var(--font-display);font-variant-numeric:tabular-nums}
+.stat span{font:600 12px var(--font-body);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.stat.over.has b{color:var(--bad)}
+.stat.soon.has b{color:var(--warn)}
+.stat.ok.has b{color:var(--ok)}
+
+.banner{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:13.5px;color:var(--ink-soft)}
+.banner.bad{color:var(--bad);background:var(--bad-bg);border-color:transparent}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:18px}
+.panel h2{font:700 26px/1 var(--font-display);text-transform:uppercase;letter-spacing:.015em;margin:0 0 12px}
+.empty{border:1px dashed var(--line);border-radius:6px;padding:28px;text-align:center;color:var(--ink-soft)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px;align-items:start}
+.printer{background:var(--surface);border:1px solid var(--line);border-radius:6px;min-width:0}
+.p-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px 16px;flex-wrap:wrap;padding:16px}
+.p-id{min-width:0;flex:1 1 180px}
+.p-id h2{font:700 28px/1.05 var(--font-display);text-transform:uppercase;letter-spacing:.015em;margin:0;overflow-wrap:anywhere}
+.tag{display:inline-block;vertical-align:middle;font:500 10px var(--font-mono);letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line);border-radius:3px;padding:1px 6px;color:var(--ink-soft);margin-left:6px}
+.model{margin:4px 0 0;color:var(--ink-soft);font-size:13px;overflow-wrap:anywhere}
+.p-sum{margin-top:8px}
+
+.odo{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.odo .lbl{font:600 11px var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft)}
+.odo-row{display:flex;align-items:baseline;gap:6px}
+.odo input{
+  font:700 40px/1 var(--font-display);
+  width:6.5ch;text-align:right;
+  background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);border-radius:4px;padding:4px 8px;
+  font-variant-numeric:tabular-nums;
+  -moz-appearance:textfield;
+}
+.odo input::-webkit-outer-spin-button,.odo input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.odo .unit{font:500 13px var(--font-mono);color:var(--ink-soft)}
+
+.pill{display:inline-block;font:600 12px/1.4 var(--font-body);padding:2px 10px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pill.ok{color:var(--ok);background:var(--ok-bg)}
+.pill.soon{color:var(--warn);background:var(--warn-bg)}
+.pill.over{color:var(--bad);background:var(--bad-bg)}
+
+.tasks{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.task,.none{padding:12px 16px;border-bottom:1px solid var(--line)}
+.none{color:var(--ink-soft);font-size:14px}
+.task{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:start}
+.t-name{font-weight:600;overflow-wrap:anywhere}
+.t-meta{font-size:12.5px;color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.g-row{grid-column:1/-1;display:flex;align-items:center;gap:10px}
+.gauge{position:relative;flex:1;height:8px;border-radius:2px;background:var(--gauge-track);overflow:hidden;--fill:var(--ok-fill)}
+.gauge i{display:block;height:100%;background:var(--fill);transition:width .4s ease}
+.gauge::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 1px),var(--surface) calc(10% - 1px),var(--surface) 10%);pointer-events:none}
+.task.soon .gauge{--fill:var(--warn-fill)}
+.task.over .gauge{--fill:var(--bad-fill)}
+.g-label{font:500 12px var(--font-mono);color:var(--ink-soft);white-space:nowrap;font-variant-numeric:tabular-nums}
+.t-actions{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap}
+
+.p-foot{padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}
+.p-foot .form{flex:1 1 100%}
+.form-slot{padding:0 16px 16px}
+
+.form{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:12px;min-width:0}
+.form .wide{grid-column:1/-1}
+.form-title{grid-column:1/-1;font-weight:600;overflow-wrap:anywhere}
+.hint{grid-column:1/-1;margin:0;font-size:12.5px;color:var(--ink-soft)}
+.setup{display:flex;flex-wrap:wrap;align-items:center;gap:8px 28px;padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-2)}
+.s-cell{display:flex;flex-direction:column;min-width:0}
+.s-lbl{font:600 11px var(--font-body);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.s-val{font-weight:500;overflow-wrap:anywhere}
+.s-val.unset{font-weight:400;color:var(--ink-soft)}
+.setup .btn{margin-left:auto}
+.top-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:9px 14px;font:600 13.5px/1.2 var(--font-body);cursor:pointer;color:var(--ink-soft)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.quick{display:flex;flex-direction:column;gap:6px}
+.q-scroll{max-height:250px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--surface);display:flex;flex-direction:column;gap:12px}
+.c-grp{display:flex;flex-direction:column;gap:5px}
+.c-list{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:500 12.5px/1.2 var(--font-body);padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--ink);cursor:pointer}
+.chip:hover{background:var(--surface-2)}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid.board{grid-template-columns:minmax(0,1fr)}
+.board{border-top:1px solid var(--line)}
+.b-row{display:grid;grid-template-columns:minmax(110px,1.5fr) repeat(12,minmax(0,1fr)) minmax(96px,1.3fr);gap:0 2px;align-items:center;padding:8px 16px 4px}
+.b-head{padding-block:10px 4px}
+.b-m{text-align:center;font:600 11px var(--font-mono);letter-spacing:.04em;color:var(--ink-soft)}
+.b-m.now{color:var(--accent);border-bottom:2px solid var(--accent)}
+.b-item{--mk:var(--accent);border-top:1px solid var(--line)}
+.b-item.soon{--mk:var(--warn-fill)}
+.b-item.over{--mk:var(--bad-fill)}
+.b-name{font:700 17px/1.05 var(--font-display);text-transform:uppercase;letter-spacing:.04em;overflow-wrap:anywhere;padding-right:8px}
+.b-c{position:relative;display:flex;align-items:center;justify-content:center;height:40px;font:500 11px var(--font-mono);letter-spacing:.03em;color:var(--ink-soft)}
+.b-c.mark{color:var(--ink);font-weight:600}
+.b-c.mark::before{content:"";position:absolute;inset:3px -2px;border:3px solid var(--mk);border-radius:3px}
+.b-note{text-align:right;font-size:12.5px;color:var(--ink-soft);font-variant-numeric:tabular-nums;padding-left:8px}
+.b-act{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 10px}
+.b-item .form{margin:0 16px 12px}
+.b-help{margin:0;padding:12px 16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-soft)}
+@media (max-width:700px){
+  .b-row{grid-template-columns:repeat(12,minmax(0,1fr));gap:2px}
+  .b-name,.b-note{grid-column:1/-1;text-align:left;padding:0}
+  .b-head .sp{display:none}
+  .b-m,.b-c{font-size:9.5px;letter-spacing:0}
+  .b-c{height:34px}
+}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld span{font:600 11px var(--font-body);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.fld input,.fld select,.filter select{
+  width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:4px;
+  background:var(--surface);color:var(--ink);min-width:0;
+}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--ink-soft)}
+.check input{margin-top:4px;accent-color:var(--accent)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.spacer{flex:1}
+
+.history{margin-top:30px}
+.h-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.h-head h2{font:700 28px/1 var(--font-display);text-transform:uppercase;letter-spacing:.015em;margin:0}
+.filter select{width:auto;max-width:100%}
+.logs{list-style:none;margin:0;padding:0;border-bottom:1px solid var(--line)}
+.log{display:grid;grid-template-columns:96px minmax(0,1fr) auto auto;gap:4px 14px;align-items:start;padding:12px 0;border-top:1px solid var(--line)}
+.l-date{font:500 12.5px var(--font-mono);color:var(--ink-soft);padding-top:2px}
+.l-main{min-width:0}
+.l-main b{font-weight:600}
+.l-printer{color:var(--ink-soft);font-size:13px;margin-left:6px}
+.l-note{font-size:13.5px;color:var(--ink-soft);overflow-wrap:anywhere}
+.l-hours{font:500 12.5px var(--font-mono);color:var(--ink-soft);padding-top:2px;white-space:nowrap}
+.more{margin-top:12px}
+
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  max-width:calc(100vw - 32px);
+  background:var(--ink);color:var(--bg);
+  padding:10px 16px;border-radius:6px;font-size:14px;z-index:20;
+  box-shadow:0 6px 24px rgba(0,0,0,.25);
+}
+
+@media (max-width:560px){
+  .log{grid-template-columns:minmax(0,1fr) auto}
+  .l-date{grid-column:1/-1;padding-top:0}
+}
+@media (max-width:480px){
+  .stat{flex-direction:column;align-items:flex-start;gap:2px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important}
+}
+</style>
+
+<style>[hidden]{display:none!important}</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="eyebrow" id="today"></p>
+      <h1>Printer Maintenance Log</h1>
+    </div>
+    <div class="top-actions">
+      <div class="seg" id="view-seg" role="group" aria-label="View" hidden>
+        <button type="button" data-action="set-view" data-view="list" aria-pressed="true">Tasks</button>
+        <button type="button" data-action="set-view" data-view="board" aria-pressed="false">Year board</button>
+      </div>
+      <button class="btn primary" id="add-printer-btn" data-action="toggle-add-printer" aria-expanded="false" hidden>Add printer</button>
+    </div>
+  </header>
+  <main id="app"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var COMMON=[
+  {name:'Carbon rods',unit:'months',interval:6},
+  {name:'Linear rods',unit:'months',interval:3},
+  {name:'Lead screws',unit:'months',interval:3},
+  {name:'Belts',unit:'months',interval:6},
+  {name:'Cutter',unit:'months',interval:3},
+  {name:'Extruder',unit:'months',interval:6},
+  {name:'Fans',unit:'months',interval:6},
+  {name:'Nozzle',unit:'months',interval:3}
+];
+function sg(group,list){return list.map(function(x){return {name:x[0],unit:'months',interval:x[1],group:group};});}
+var SUGGEST=COMMON.map(function(c){return {name:c.name,unit:c.unit,interval:c.interval,group:'Your board'};}).concat(
+  sg('Motion and frame',[['Pulleys and idlers',6],['Stepper motors',12],['Linear bearings',6],['Frame screws',6],['Z axis and gantry alignment',6]]),
+  sg('Extruder and hotend',[['Hotend',6],['PTFE tube',12],['Thermistor and heater cartridge',12],['Heater block and nozzle torque',3],['Hotend silicone sock',6],['Nozzle wiper and purge area',3]]),
+  sg('Bed and build plate',[['Build plate',1],['Replace build plate',12],['Bed leveling and probe',3],['Bed springs and leveling knobs',6],['Bed heater and wiring',12],['Z offset check',3]]),
+  sg('Filament handling',[['Filament sensor',6],['Filament path and PTFE tubing',6],['Spool holders and bearings',6],['Desiccant and dry box',3],['Filament dryer',6]]),
+  sg('Electronics and software',[['Wiring and connectors',6],['Power supply and electronics',12],['Mainboard fans and heatsinks',6],['Firmware updates',6],['Config backup',6],['Calibration print',6],['Camera lens and lights',6]]),
+  sg('Enclosure and safety',[['Enclosure filter',6],['Chamber heater and fan',6],['Enclosure panels and door seals',12],['Smoke detector and fire safety',6]]),
+  sg('Multi-material systems',[['CFS feed gears and rollers',3],['CFS filament path and PTFE tubes',6],['CFS desiccant',3],['AMS Lite feed rollers',3],['AMS Lite filament path and PTFE tubes',6],['AMS Lite spool holders',6],['AMS feed rollers and gears',3],['AMS filament path and PTFE tubes',6],['AMS desiccant',3],['MMU selector and pulleys',3],['MMU PTFE tubes',6],['Tool changer docking and couplings',6]]),
+  sg('Resin printers',[['Resin vat and FEP film',3],['LCD screen inspection',6],['Resin build plate leveling',6],['Air filter and carbon',3],['Wash and cure station',3]])
+);
+var KEY='printer-maintenance-v1';
+
+var state={
+  status:'loading',mode:'db',
+  printers:[],logs:[],printersReady:false,logsReady:false,
+  view:'list',form:null,confirm:null,draft:{},
+  filter:'all',showAllLogs:false,dbError:'',localFail:false
+};
+var db=null;
+var app=document.getElementById('app');
+var addBtn=document.getElementById('add-printer-btn');
+var toastEl=document.getElementById('toast');
+var toastTimer=null;
+
+/* ---------- helpers ---------- */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function pad(n){return String(n).padStart(2,'0');}
+function uid(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+function todayStr(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+function toUTC(s){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s||'');if(!m)return NaN;return Date.UTC(+m[1],+m[2]-1,+m[3]);}
+function daysBetween(a,b){return Math.round((toUTC(b)-toUTC(a))/86400000);}
+function addDays(s,n){var t=toUTC(s);if(isNaN(t))return '';var d=new Date(t+n*86400000);return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate());}
+var NOZZLES=['Brass','Hardened steel','Stainless steel','Tungsten carbide','Ruby-tipped','Plated copper'];
+var PLATES=['Smooth PEI','Textured PEI','Double-sided PEI','Glass','Garolite (G10)','Spring steel','Magnetic flex plate','BuildTak'];
+function choiceField(label,key,list,cur,placeholder){
+  cur=cur||'';
+  var inList=list.indexOf(cur)>=0;
+  var sel=dv(key+'-sel',cur===''?'':(inList?cur:'__other'));
+  var opts='<option value=""'+(sel===''?' selected':'')+'>Not set</option>'+
+    list.map(function(o){return '<option value="'+esc(o)+'"'+(sel===o?' selected':'')+'>'+esc(o)+'</option>';}).join('')+
+    '<option value="__other"'+(sel==='__other'?' selected':'')+'>Other (type your own)</option>';
+  var out='<label class="fld"><span>'+label+'</span><select id="'+key+'-sel" data-change="toggle-other">'+opts+'</select></label>';
+  if(sel==='__other'){
+    out+='<label class="fld"><span>'+label+' (your own)</span><input id="'+key+'" type="text" maxlength="60" placeholder="'+esc(placeholder)+'" value="'+esc(dv(key,inList?'':cur))+'"></label>';
+  }
+  return out;
+}
+function choiceValue(key){
+  var s=val(key+'-sel');
+  return s==='__other'?val(key).trim():s;
+}
+function setupFields(p){
+  p=p||{};
+  return choiceField('Nozzle type','f-nozzle',NOZZLES,p.nozzle,'e.g. CHT brass')+
+  '<label class="fld"><span>Nozzle size</span><input id="f-nsize" type="text" maxlength="20" placeholder="e.g. 0.4 mm" value="'+esc(dv('f-nsize',p.nozzleSize||''))+'"></label>'+
+  choiceField('Build plate installed','f-plate',PLATES,p.plate,'e.g. Textured G10');
+}
+function setupView(p){
+  var nozzle=[p.nozzle,p.nozzleSize].filter(Boolean).join(' · ');
+  function cell(label,v){return '<div class="s-cell"><span class="s-lbl">'+label+'</span><span class="s-val'+(v?'':' unset')+'">'+(v?esc(v):'Not set')+'</span></div>';}
+  return '<div class="setup">'+cell('Nozzle',nozzle)+cell('Build plate',p.plate)+'<button class="btn small ghost" data-action="open-printer-settings" data-printer="'+esc(p.id)+'">Change</button></div>';
+}
+function addMonths(s,n){
+  var t=toUTC(s);if(isNaN(t))return '';
+  var d=new Date(t);var y=d.getUTCFullYear(),m=d.getUTCMonth()+n,day=d.getUTCDate();
+  var last=new Date(Date.UTC(y,m+1,0)).getUTCDate();
+  var r=new Date(Date.UTC(y,m,Math.min(day,last)));
+  return r.getUTCFullYear()+'-'+pad(r.getUTCMonth()+1)+'-'+pad(r.getUTCDate());
+}
+function normUnit(u){return u==='days'||u==='months'?u:'hours';}
+function fmtDate(s){
+  var t=toUTC(s);if(isNaN(t))return '';
+  var d=new Date(t);var same=d.getUTCFullYear()===new Date().getFullYear();
+  var o={month:'short',day:'numeric',timeZone:'UTC'};if(!same)o.year='numeric';
+  return d.toLocaleDateString('en-US',o);
+}
+function fmt(n){return Number(n).toLocaleString('en-US',{maximumFractionDigits:1});}
+function num(v){var s=String(v==null?'':v).trim();if(s==='')return null;var n=Number(s);return isFinite(n)?n:null;}
+function val(id){var el=document.getElementById(id);return el?el.value:'';}
+function chk(id){var el=document.getElementById(id);return !!(el&&el.checked);}
+function dv(k,fb){return Object.prototype.hasOwnProperty.call(state.draft,k)?state.draft[k]:fb;}
+function getP(id){return state.printers.find(function(p){return p.id===id;});}
+function toast(msg){
+  toastEl.textContent=msg;toastEl.hidden=false;
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){toastEl.hidden=true;},3400);
+}
+
+/* ---------- maintenance logic ---------- */
+function taskStatus(p,t){
+  var kind=normUnit(t.unit);
+  var interval=Math.max(1,Number(t.interval)||1);
+  var span=interval,used;
+  if(kind==='hours'){used=Math.max(0,(Number(p.hours)||0)-(Number(t.lastHours)||0));}
+  else{
+    var last=t.lastDate||todayStr();
+    if(kind==='months'){span=daysBetween(last,addMonths(last,interval));if(!(span>0))span=interval*30;}
+    var d=daysBetween(last,todayStr());used=isNaN(d)?0:Math.max(0,d);
+  }
+  var remaining=span-used;
+  var level=remaining<=0?'over':(remaining<=span*0.15?'soon':'ok');
+  return {unit:kind==='hours'?'hours':'days',interval:span,used:used,remaining:remaining,pct:used/span,level:level};
+}
+function pillText(s){
+  if(s.remaining===0)return 'Due now';
+  var n=Math.abs(s.remaining);
+  var u=s.unit==='days'?(n===1?'day':'days'):'h';
+  return fmt(n)+' '+u+(s.remaining>0?' left':' overdue');
+}
+function gaugeLabel(s){return s.unit==='days'?(fmt(s.used)+' / '+fmt(s.interval)+' d'):(fmt(s.used)+' / '+fmt(s.interval)+' h');}
+
+/* ---------- storage ---------- */
+var chains=new Map();
+function queue(key,fn){
+  var prev=chains.get(key)||Promise.resolve();
+  var next=prev.catch(function(){}).then(fn);
+  chains.set(key,next);
+  return next;
+}
+function printerBody(p){
+  return JSON.parse(JSON.stringify({name:p.name,model:p.model,nozzle:p.nozzle||'',nozzleSize:p.nozzleSize||'',plate:p.plate||'',hours:p.hours,order:p.order,createdAt:p.createdAt,example:!!p.example,tasks:p.tasks}));
+}
+function logBody(l){
+  return JSON.parse(JSON.stringify({printerId:l.printerId,taskId:l.taskId,taskName:l.taskName,date:l.date,hours:l.hours,note:l.note||'',createdAt:l.createdAt}));
+}
+function saveLocal(){
+  try{localStorage.setItem(KEY,JSON.stringify({printers:state.printers,logs:state.logs}));state.localFail=false;}
+  catch(e){state.localFail=true;}
+}
+function loadLocal(){
+  try{
+    var raw=localStorage.getItem(KEY);
+    if(raw){var o=JSON.parse(raw);state.printers=(o.printers||[]).map(function(p){return normPrinter(p.id,p);}).sort(byOrder);state.logs=o.logs||[];}
+  }catch(e){}
+}
+function savePrinterDoc(p){
+  if(state.mode!=='db'){saveLocal();return Promise.resolve();}
+  var body=printerBody(p);
+  return queue('p:'+p.id,function(){return db.doc('printers/'+p.id).set(body);});
+}
+function saveLogDoc(l){
+  if(state.mode!=='db'){saveLocal();return Promise.resolve();}
+  var body=logBody(l);
+  return queue('l:'+l.id,function(){return db.doc('logs/'+l.id).set(body);});
+}
+function deleteLogDoc(id){
+  if(state.mode!=='db'){saveLocal();return Promise.resolve();}
+  return queue('l:'+id,function(){return db.doc('logs/'+id).delete();});
+}
+async function removePrinterData(id,logIds){
+  if(state.mode!=='db'){saveLocal();return;}
+  await queue('p:'+id,function(){return db.doc('printers/'+id).delete();});
+  for(var i=0;i<logIds.length;i++){await deleteLogDoc(logIds[i]);}
+}
+async function persist(fn){
+  try{await fn();}
+  catch(err){toast('Could not save that change. Check your connection and try again.');reload();}
+}
+function normPrinter(id,d){
+  return {
+    id:id,name:String(d.name||'Untitled printer'),model:String(d.model||''),nozzle:String(d.nozzle||''),nozzleSize:String(d.nozzleSize||''),plate:String(d.plate||''),
+    hours:Number(d.hours)||0,order:Number(d.order)||0,createdAt:Number(d.createdAt)||0,
+    example:!!d.example,
+    tasks:Array.isArray(d.tasks)?d.tasks.map(function(t){return {id:t.id,name:String(t.name||'Task'),unit:normUnit(t.unit),interval:Number(t.interval)||1,lastHours:Number(t.lastHours)||0,lastDate:t.lastDate||todayStr()};}):[]
+  };
+}
+function byOrder(a,b){return (a.order-b.order)||(a.createdAt-b.createdAt);}
+function applyPrinters(snap){
+  state.printers=snap.docs.map(function(d){return normPrinter(d.id,d.data());}).sort(byOrder);
+  state.printersReady=true;refreshStatus();
+}
+function applyLogs(snap){
+  state.logs=snap.docs.map(function(d){var x=d.data();return {id:d.id,printerId:x.printerId,taskId:x.taskId,taskName:x.taskName,date:x.date,hours:x.hours,note:x.note||'',createdAt:x.createdAt||0};});
+  state.logsReady=true;refreshStatus();
+}
+function refreshStatus(){if(state.printersReady&&state.logsReady)state.status='ready';}
+function dbFail(){
+  state.status='ready';
+  state.dbError='Your saved data could not be loaded. Reload the page to try again.';
+  render();
+}
+function subscribe(){
+  db.collection('printers').onSnapshot(function(s){applyPrinters(s);render();},dbFail);
+  db.collection('logs').onSnapshot(function(s){applyLogs(s);render();},dbFail);
+}
+async function reload(){
+  if(state.mode!=='db')return;
+  try{
+    var r=await Promise.all([db.collection('printers').get(),db.collection('logs').get()]);
+    applyPrinters(r[0]);applyLogs(r[1]);render();
+  }catch(e){}
+}
+
+/* ---------- views ---------- */
+function bannerView(){
+  var out=[];
+  if(state.mode==='local'){
+    out.push('<div class="banner">'+(state.localFail?'This browser would not save your changes, so they will be lost when you close the page.':'Saved data is not available here, so changes stay in this browser only.')+'</div>');
+  }
+  if(state.dbError)out.push('<div class="banner bad">'+esc(state.dbError)+'</div>');
+  if(state.printers.some(function(p){return p.example;})){
+    out.push('<div class="banner">Sample printers are loaded so you can see how this works. Rename them in Printer settings, or remove them when you add your own.</div>');
+  }
+  return out.join('');
+}
+function summaryView(){
+  var c={over:0,soon:0,ok:0};
+  state.printers.forEach(function(p){p.tasks.forEach(function(t){c[taskStatus(p,t).level]++;});});
+  function stat(k,label){return '<div class="stat '+k+(c[k]>0?' has':'')+'"><b>'+c[k]+'</b><span>'+label+'</span></div>';}
+  return '<section class="summary" aria-label="Maintenance summary">'+stat('over','Overdue')+stat('soon','Due soon')+stat('ok','On schedule')+'</section>';
+}
+function addPrinterPanel(first){
+  return '<section class="panel" aria-labelledby="add-h"><h2 id="add-h">'+(first?'Add your first printer':'New printer')+'</h2>'+
+  '<form class="form" data-submit="save-printer-new">'+
+  '<label class="fld"><span>Name</span><input id="f-name" type="text" required maxlength="60" placeholder="Voron 2.4" value="'+esc(dv('f-name',''))+'"></label>'+
+  '<label class="fld"><span>Model or location (optional)</span><input id="f-model" type="text" maxlength="80" placeholder="350 mm build, workshop shelf 2" value="'+esc(dv('f-model',''))+'"></label>'+
+  setupFields(null)+
+  '<label class="fld"><span>Print hours so far</span><input id="f-hours" type="number" step="any" min="0" inputmode="decimal" value="'+esc(dv('f-hours','0'))+'"></label>'+
+  '<label class="check wide"><input id="f-common" type="checkbox"'+(dv('f-common',true)?' checked':'')+'><span>Start with '+COMMON.length+' categories ('+COMMON.map(function(c){return c.name.toLowerCase();}).join(', ')+'). Intervals count from today, and you can edit or remove any of them later.</span></label>'+
+  '<div class="actions wide"><button class="btn primary" type="submit">Add printer</button>'+(first?'':'<button class="btn" type="button" data-action="close-form">Cancel</button>')+'</div>'+
+  '</form></section>';
+}
+function logForm(p,t){
+  return '<form class="form" data-submit="save-log">'+
+  '<div class="form-title">Log service: '+esc(t.name)+'</div>'+
+  '<label class="fld"><span>Date</span><input id="f-date" type="date" required value="'+esc(dv('f-date',todayStr()))+'"></label>'+
+  '<label class="fld"><span>Print hours at service</span><input id="f-hours" type="number" step="any" min="0" inputmode="decimal" required value="'+esc(dv('f-hours',p.hours))+'"></label>'+
+  '<label class="fld wide"><span>Note (optional)</span><input id="f-note" type="text" maxlength="200" placeholder="e.g. Replaced silicone sock, re-tightened heater block" value="'+esc(dv('f-note',''))+'"></label>'+
+  '<div class="actions wide"><button class="btn primary" type="submit">Save service</button><button class="btn" type="button" data-action="close-form">Cancel</button></div>'+
+  '</form>';
+}
+function taskFields(p,t){
+  var unit=dv('f-unit',t?t.unit:'hours');
+  return '<label class="fld wide"><span>Task</span><input id="f-name" type="text" required maxlength="80" placeholder="e.g. Clean extruder gears" value="'+esc(dv('f-name',t?t.name:''))+'"></label>'+
+  '<label class="fld"><span>Repeat every</span><input id="f-interval" type="number" step="any" min="1" inputmode="decimal" required value="'+esc(dv('f-interval',t?t.interval:100))+'"></label>'+
+  '<label class="fld"><span>Counted in</span><select id="f-unit"><option value="hours"'+(unit==='hours'?' selected':'')+'>Print hours</option><option value="days"'+(unit==='days'?' selected':'')+'>Calendar days</option><option value="months"'+(unit==='months'?' selected':'')+'>Months</option></select></label>'+
+  '<label class="fld"><span>Last serviced on</span><input id="f-last" type="date" required value="'+esc(dv('f-last',t?t.lastDate:todayStr()))+'"></label>'+
+  '<label class="fld"><span>Print hours at that service</span><input id="f-lasth" type="number" step="any" min="0" inputmode="decimal" value="'+esc(dv('f-lasth',t?t.lastHours:p.hours))+'"></label>';
+}
+function editTaskForm(p,t){
+  var key='task:'+t.id;var armed=state.confirm===key;
+  return '<form class="form" data-submit="save-task-edit">'+
+  '<div class="form-title">Edit task</div>'+taskFields(p,t)+'<p class="hint">Changing the date moves the next due date. It does not add a history entry, so use Log service for that. Print hours only matter for tasks counted in print hours.</p>'+
+  '<div class="actions wide"><button class="btn primary" type="submit">Save changes</button><button class="btn" type="button" data-action="close-form">Cancel</button><span class="spacer"></span>'+
+  '<button id="x-'+esc(key)+'" class="btn danger'+(armed?' armed':'')+'" type="button" data-action="delete-task" data-printer="'+esc(p.id)+'" data-task="'+esc(t.id)+'">'+(armed?'Click again to delete':'Remove category')+'</button></div>'+
+  '</form>';
+}
+function addTaskForm(p){
+  return '<form class="form" data-submit="save-task-new">'+
+  '<div class="form-title">New category for '+esc(p.name)+'</div>'+suggestChips(p)+taskFields(p,null)+
+  '<div class="actions wide"><button class="btn primary" type="submit">Add task</button><button class="btn" type="button" data-action="close-form">Cancel</button></div>'+
+  '</form>';
+}
+function printerSettingsForm(p){
+  var key='printer:'+p.id;var armed=state.confirm===key;
+  return '<div class="form-slot"><form class="form" data-submit="save-printer-settings">'+
+  '<div class="form-title">Printer settings</div>'+
+  '<label class="fld"><span>Name</span><input id="f-name" type="text" required maxlength="60" value="'+esc(dv('f-name',p.name))+'"></label>'+
+  '<label class="fld"><span>Model or location</span><input id="f-model" type="text" maxlength="80" value="'+esc(dv('f-model',p.model))+'"></label>'+
+  setupFields(p)+
+  '<div class="actions wide"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" data-action="close-form">Cancel</button><span class="spacer"></span>'+
+  '<button id="x-'+esc(key)+'" class="btn danger'+(armed?' armed':'')+'" type="button" data-action="delete-printer" data-printer="'+esc(p.id)+'">'+(armed?'Click again to remove printer and its history':'Remove printer')+'</button></div>'+
+  '</form></div>';
+}
+function taskView(p,r){
+  var t=r.t,s=r.s;
+  var f=state.form;
+  var open=f&&f.printerId===p.id&&f.taskId===t.id;
+  var meta;
+  if(t.unit==='months'){
+    meta='Every '+fmt(t.interval)+(Number(t.interval)===1?' month':' months')+' · last done '+esc(fmtDate(t.lastDate))+' · due '+esc(fmtDate(addMonths(t.lastDate,t.interval)));
+  }else if(s.unit==='hours'){
+    meta='Every '+fmt(t.interval)+' h · last done '+esc(fmtDate(t.lastDate))+' at '+fmt(t.lastHours)+' h';
+  }else{
+    meta='Every '+fmt(t.interval)+(Number(t.interval)===1?' day':' days')+' · last done '+esc(fmtDate(t.lastDate))+' · due '+esc(fmtDate(addDays(t.lastDate,t.interval)));
+  }
+  var form='';
+  if(open&&f.type==='logTask')form=logForm(p,t);
+  if(open&&f.type==='editTask')form=editTaskForm(p,t);
+  var width=Math.min(100,s.pct*100);
+  return '<li class="task '+s.level+'">'+
+    '<div><div class="t-name">'+esc(t.name)+'</div><div class="t-meta">'+meta+'</div></div>'+
+    '<span class="pill '+s.level+'">'+esc(pillText(s))+'</span>'+
+    '<div class="g-row"><div class="gauge" role="img" aria-label="'+esc(gaugeLabel(s))+'"><i style="width:'+width.toFixed(1)+'%"></i></div><span class="g-label">'+esc(gaugeLabel(s))+'</span></div>'+
+    '<div class="t-actions"><button class="btn small" data-action="open-log" data-printer="'+esc(p.id)+'" data-task="'+esc(t.id)+'">Log service</button>'+
+    '<button class="btn small ghost" data-action="open-edit-task" data-printer="'+esc(p.id)+'" data-task="'+esc(t.id)+'">Edit / set date</button>'+removeBtn(p,t)+'</div>'+
+    form+
+  '</li>';
+}
+var MONTHS=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+function removeBtn(p,t){
+  var armed=state.confirm==='task:'+t.id;
+  return '<button id="xr-'+esc(t.id)+'" class="btn small '+(armed?'danger armed':'ghost')+'" data-action="delete-task" data-printer="'+esc(p.id)+'" data-task="'+esc(t.id)+'">'+(armed?'Click again to remove':'Remove')+'</button>';
+}
+function suggestChips(p){
+  var have=p.tasks.map(function(t){return t.name.toLowerCase();});
+  var order=[],groups={};
+  SUGGEST.forEach(function(s,i){
+    if(have.indexOf(s.name.toLowerCase())>=0)return;
+    if(!groups[s.group]){groups[s.group]=[];order.push(s.group);}
+    groups[s.group].push('<button type="button" class="chip" title="Every '+s.interval+(s.interval===1?' month':' months')+'" data-action="suggest-task" data-idx="'+i+'">'+esc(s.name)+'</button>');
+  });
+  if(!order.length)return '';
+  return '<div class="wide quick"><span class="s-lbl">Quick picks (or type your own below)</span><div class="q-scroll">'+
+    order.map(function(g){return '<div class="c-grp"><span class="s-lbl">'+esc(g)+'</span><div class="c-list">'+groups[g].join('')+'</div></div>';}).join('')+
+    '</div></div>';
+}
+function taskForm(p,t){
+  var f=state.form;
+  if(!(f&&f.printerId===p.id&&f.taskId===t.id))return '';
+  if(f.type==='logTask')return logForm(p,t);
+  if(f.type==='editTask')return editTaskForm(p,t);
+  return '';
+}
+function boardView(p){
+  if(!p.tasks.length)return '<div class="none">No categories yet. Add the first one below.</div>';
+  var now=new Date(),yr=now.getFullYear(),cm=now.getMonth();
+  var head='<div class="b-row b-head"><span class="sp"></span>'+MONTHS.map(function(m,i){return '<span class="b-m'+(i===cm?' now':'')+'">'+m+'</span>';}).join('')+'<span class="sp"></span></div>';
+  var items=p.tasks.map(function(t){
+    var s=taskStatus(p,t),col=-1,note;
+    if(t.unit==='hours'){
+      note=s.remaining>0?fmt(s.remaining)+' h left':(s.remaining===0?'Due now':fmt(-s.remaining)+' h over');
+      if(s.level!=='ok')col=cm;
+    }else{
+      var due=t.unit==='months'?addMonths(t.lastDate,t.interval):addDays(t.lastDate,t.interval);
+      var dt=new Date(toUTC(due));
+      note=(s.level==='over'?'Overdue · ':'Due ')+fmtDate(due);
+      col=dt.getUTCMonth();
+    }
+    var cells=MONTHS.map(function(m,i){return '<span class="b-c'+(i===col?' mark':'')+(i===cm?' now':'')+'">'+m+'</span>';}).join('');
+    return '<div class="b-item '+s.level+'"><div class="b-row"><div class="b-name">'+esc(t.name)+'</div>'+cells+'<div class="b-note">'+esc(note)+'</div></div>'+
+      '<div class="b-act"><button class="btn small" data-action="open-log" data-printer="'+esc(p.id)+'" data-task="'+esc(t.id)+'">Log service</button>'+
+      '<button class="btn small ghost" data-action="open-edit-task" data-printer="'+esc(p.id)+'" data-task="'+esc(t.id)+'">Edit / set date</button>'+removeBtn(p,t)+'</div>'+
+      taskForm(p,t)+'</div>';
+  }).join('');
+  return '<div class="board">'+head+items+'<p class="b-help">The frame marks the month each category is next due, like the sliders on a wall board. Check the date on the right for the year. Orange means due soon and red means overdue. Categories counted in print hours show hours left, and get framed in this month once they need attention.</p></div>';
+}
+function printerView(p){
+  var rows=p.tasks.map(function(t){return {t:t,s:taskStatus(p,t)};}).sort(function(a,b){return b.s.pct-a.s.pct;});
+  var over=rows.filter(function(r){return r.s.level==='over';}).length;
+  var soon=rows.filter(function(r){return r.s.level==='soon';}).length;
+  var sum=over?'<span class="pill over">'+over+' overdue</span>':soon?'<span class="pill soon">'+soon+' due soon</span>':rows.length?'<span class="pill ok">On schedule</span>':'';
+  var f=state.form;
+  var mine=f&&f.printerId===p.id;
+  var addingTask=mine&&f.type==='addTask';
+  var settings=mine&&f.type==='editPrinter'?printerSettingsForm(p):'';
+  var foot=(addingTask?addTaskForm(p):'<button class="btn small" data-action="open-add-task" data-printer="'+esc(p.id)+'">Add category</button>')+
+    (mine&&f.type==='editPrinter'?'':'<button class="btn small ghost" data-action="open-printer-settings" data-printer="'+esc(p.id)+'">Printer settings</button>');
+  return '<article class="printer">'+
+    '<header class="p-head"><div class="p-id"><h2>'+esc(p.name)+(p.example?'<span class="tag">Sample</span>':'')+'</h2>'+
+    (p.model?'<p class="model">'+esc(p.model)+'</p>':'')+(sum?'<div class="p-sum">'+sum+'</div>':'')+'</div>'+
+    '<div class="odo"><label class="lbl" for="h-'+esc(p.id)+'">Print hours</label><span class="odo-row"><input id="h-'+esc(p.id)+'" type="number" step="any" min="0" inputmode="decimal" value="'+esc(p.hours)+'" data-change="set-hours" data-printer="'+esc(p.id)+'"><span class="unit">h</span></span></div></header>'+
+    setupView(p)+
+    settings+
+    (state.view==='board'?boardView(p):'<ul class="tasks">'+(rows.map(function(r){return taskView(p,r);}).join('')||'<li class="none">No categories yet. Add the first one below.</li>')+'</ul>')+
+    '<footer class="p-foot">'+foot+'</footer>'+
+  '</article>';
+}
+function historyView(){
+  if(!state.printers.length)return '';
+  var names=new Map(state.printers.map(function(p){return [p.id,p.name];}));
+  var filter=state.filter!=='all'&&!names.has(state.filter)?'all':state.filter;
+  var logs=state.logs.filter(function(l){return names.has(l.printerId)&&(filter==='all'||l.printerId===filter);});
+  logs.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''))||((b.createdAt||0)-(a.createdAt||0));});
+  var shown=state.showAllLogs?logs:logs.slice(0,15);
+  var opts='<option value="all"'+(filter==='all'?' selected':'')+'>All printers</option>'+state.printers.map(function(p){return '<option value="'+esc(p.id)+'"'+(filter===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
+  var list=shown.map(function(l){
+    var key='log:'+l.id;var armed=state.confirm===key;
+    return '<li class="log"><time class="l-date">'+esc(fmtDate(l.date))+'</time>'+
+      '<div class="l-main"><b>'+esc(l.taskName)+'</b><span class="l-printer">'+esc(names.get(l.printerId))+'</span>'+(l.note?'<div class="l-note">'+esc(l.note)+'</div>':'')+'</div>'+
+      '<div class="l-hours">'+esc(fmt(l.hours))+' h</div>'+
+      '<button id="x-'+esc(key)+'" class="btn small '+(armed?'danger armed':'ghost')+'" data-action="delete-log" data-log="'+esc(l.id)+'">'+(armed?'Confirm delete':'Delete')+'</button></li>';
+  }).join('');
+  return '<section class="history" aria-labelledby="hist-h"><div class="h-head"><h2 id="hist-h">Service history</h2>'+
+    '<label class="filter"><span class="eyebrow" style="display:block">SHOW</span><select id="history-filter" data-change="set-filter">'+opts+'</select></label></div>'+
+    (logs.length?'<ul class="logs">'+list+'</ul>'+(logs.length>shown.length?'<button class="btn more" data-action="show-all-logs">Show all '+logs.length+' entries</button>':''):
+    '<div class="empty">No services logged yet. Use Log service on any task above and it will appear here.</div>')+
+  '</section>';
+}
+function view(){
+  if(state.status==='loading')return '<div class="empty">Loading your printers...</div>';
+  var has=state.printers.length>0;
+  var out=[bannerView()];
+  if(has)out.push(summaryView());
+  if((state.form&&state.form.type==='addPrinter')||!has)out.push(addPrinterPanel(!has));
+  if(has)out.push('<div class="grid'+(state.view==='board'?' board':'')+'">'+state.printers.map(printerView).join('')+'</div>');
+  out.push(historyView());
+  return out.join('');
+}
+function render(){
+  var act=document.activeElement;
+  var fid=act&&act.id&&app.contains(act)?act.id:null;
+  var s=null,e=null;
+  if(fid){try{s=act.selectionStart;e=act.selectionEnd;}catch(x){s=null;}}
+  app.innerHTML=view();
+  var hasP=state.status==='ready'&&state.printers.length>0;
+  addBtn.hidden=!hasP;
+  var seg=document.getElementById('view-seg');seg.hidden=!hasP;
+  Array.prototype.forEach.call(seg.querySelectorAll('button'),function(b){b.setAttribute('aria-pressed',b.dataset.view===state.view?'true':'false');});
+  addBtn.setAttribute('aria-expanded',state.form&&state.form.type==='addPrinter'?'true':'false');
+  if(fid){
+    var el=document.getElementById(fid);
+    if(el){el.focus({preventScroll:true});if(typeof s==='number'){try{el.setSelectionRange(s,e);}catch(x){}}}
+  }
+}
+
+/* ---------- actions ---------- */
+function focusEl(id){var el=document.getElementById(id);if(el)el.focus();}
+function openForm(f,focusId){state.form=f;state.draft={};state.confirm=null;render();focusEl(focusId);}
+function closeFormState(){state.form=null;state.draft={};state.confirm=null;}
+function syncDraft(t){state.draft[t.id]=t.type==='checkbox'?t.checked:t.value;}
+function findTask(p,id){return p?p.tasks.find(function(t){return t.id===id;}):null;}
+
+var handlers={
+  'toggle-add-printer':function(){
+    var open=state.form&&state.form.type==='addPrinter';
+    state.confirm=null;state.draft={};state.form=open?null:{type:'addPrinter'};
+    render();if(!open)focusEl('f-name');
+  },
+  'open-log':function(el){openForm({type:'logTask',printerId:el.dataset.printer,taskId:el.dataset.task},'f-note');},
+  'open-edit-task':function(el){openForm({type:'editTask',printerId:el.dataset.printer,taskId:el.dataset.task},'f-name');},
+  'open-add-task':function(el){openForm({type:'addTask',printerId:el.dataset.printer},'f-name');},
+  'open-printer-settings':function(el){openForm({type:'editPrinter',printerId:el.dataset.printer},'f-name');},
+  'close-form':function(){closeFormState();render();},
+  'delete-task':function(el){
+    var key='task:'+el.dataset.task;
+    if(state.confirm!==key){state.confirm=key;render();focusEl(el.id);return;}
+    var p=getP(el.dataset.printer);if(!p)return;
+    p.tasks=p.tasks.filter(function(t){return t.id!==el.dataset.task;});
+    closeFormState();render();toast('Task deleted.');
+    persist(function(){return savePrinterDoc(p);});
+  },
+  'delete-printer':function(el){
+    var id=el.dataset.printer;var key='printer:'+id;
+    if(state.confirm!==key){state.confirm=key;render();focusEl('x-'+key);return;}
+    var p=getP(id);if(!p)return;
+    var logIds=state.logs.filter(function(l){return l.printerId===id;}).map(function(l){return l.id;});
+    state.printers=state.printers.filter(function(x){return x.id!==id;});
+    state.logs=state.logs.filter(function(l){return l.printerId!==id;});
+    closeFormState();render();toast('Removed '+p.name+'.');
+    persist(function(){return removePrinterData(id,logIds);});
+  },
+  'delete-log':function(el){
+    var id=el.dataset.log;var key='log:'+id;
+    if(state.confirm!==key){state.confirm=key;render();focusEl('x-'+key);return;}
+    state.logs=state.logs.filter(function(l){return l.id!==id;});
+    state.confirm=null;render();toast('Entry deleted.');
+    persist(function(){return deleteLogDoc(id);});
+  },
+  'set-view':function(el){state.view=el.dataset.view==='board'?'board':'list';render();},
+  'suggest-task':function(el){
+    var s=SUGGEST[Number(el.dataset.idx)];if(!s)return;
+    state.draft['f-name']=s.name;state.draft['f-interval']=s.interval;state.draft['f-unit']=s.unit;
+    render();focusEl('f-last');
+  },
+  'show-all-logs':function(){state.showAllLogs=true;render();}
+};
+var changeHandlers={
+  'set-hours':function(t){
+    var p=getP(t.dataset.printer);if(!p)return;
+    var n=num(t.value);
+    if(n===null||n<0){toast('Enter print hours as a number, 0 or more.');render();return;}
+    if(n===p.hours){render();return;}
+    p.hours=n;render();
+    persist(function(){return savePrinterDoc(p);});
+  },
+  'toggle-other':function(t){render();if(t.value==='__other')focusEl(t.id.replace('-sel',''));},
+  'set-filter':function(t){state.filter=t.value;state.showAllLogs=false;render();}
+};
+var submitHandlers={
+  'save-printer-new':function(){
+    var name=val('f-name').trim();
+    if(!name){toast('Give the printer a name.');focusEl('f-name');return;}
+    var hours=num(val('f-hours'));
+    if(hours===null||hours<0){toast('Enter print hours as a number, 0 or more.');focusEl('f-hours');return;}
+    var today=todayStr();
+    var order=state.printers.reduce(function(m,p){return Math.max(m,p.order);},0)+1;
+    var p={id:uid('p'),name:name,model:val('f-model').trim(),nozzle:choiceValue('f-nozzle'),nozzleSize:val('f-nsize').trim(),plate:choiceValue('f-plate'),hours:hours,order:order,createdAt:Date.now(),example:false,
+      tasks:chk('f-common')?COMMON.map(function(c){return {id:uid('t'),name:c.name,unit:c.unit,interval:c.interval,lastHours:hours,lastDate:today};}):[]};
+    state.printers.push(p);closeFormState();render();toast('Added '+name+'.');
+    persist(function(){return savePrinterDoc(p);});
+  },
+  'save-printer-settings':function(){
+    var p=getP(state.form&&state.form.printerId);if(!p)return;
+    var name=val('f-name').trim();
+    if(!name){toast('Give the printer a name.');focusEl('f-name');return;}
+    p.name=name;p.model=val('f-model').trim();p.example=false;
+    p.nozzle=choiceValue('f-nozzle');p.nozzleSize=val('f-nsize').trim();p.plate=choiceValue('f-plate');
+    closeFormState();render();toast('Saved.');
+    persist(function(){return savePrinterDoc(p);});
+  },
+  'save-task-new':function(){
+    var p=getP(state.form&&state.form.printerId);if(!p)return;
+    var name=val('f-name').trim();
+    if(!name){toast('Name the task.');focusEl('f-name');return;}
+    var unit=normUnit(val('f-unit'));
+    var iv=num(val('f-interval'));
+    if(iv!==null&&unit!=='hours')iv=Math.round(iv);
+    if(iv===null||iv<1){toast('Enter an interval of 1 or more.');focusEl('f-interval');return;}
+    var last=val('f-last');
+    if(isNaN(toUTC(last))){toast('Pick the date it was last serviced.');focusEl('f-last');return;}
+    var lh=num(val('f-lasth'));
+    if(lh===null||lh<0)lh=p.hours;
+    p.tasks.push({id:uid('t'),name:name,unit:unit,interval:iv,lastHours:lh,lastDate:last});
+    closeFormState();render();toast('Task added.');
+    persist(function(){return savePrinterDoc(p);});
+  },
+  'save-task-edit':function(){
+    var p=getP(state.form&&state.form.printerId);var t=findTask(p,state.form&&state.form.taskId);if(!t)return;
+    var name=val('f-name').trim();
+    if(!name){toast('Name the task.');focusEl('f-name');return;}
+    var unit=normUnit(val('f-unit'));
+    var iv=num(val('f-interval'));
+    if(iv!==null&&unit!=='hours')iv=Math.round(iv);
+    if(iv===null||iv<1){toast('Enter an interval of 1 or more.');focusEl('f-interval');return;}
+    var last=val('f-last');
+    if(isNaN(toUTC(last))){toast('Pick the date it was last serviced.');focusEl('f-last');return;}
+    var lh=num(val('f-lasth'));
+    t.name=name;t.unit=unit;t.interval=iv;t.lastDate=last;
+    if(lh!==null&&lh>=0)t.lastHours=lh;
+    closeFormState();render();toast('Task updated.');
+    persist(function(){return savePrinterDoc(p);});
+  },
+  'save-log':function(){
+    var p=getP(state.form&&state.form.printerId);var t=findTask(p,state.form&&state.form.taskId);if(!t)return;
+    var date=val('f-date');
+    if(isNaN(toUTC(date))){toast('Pick the date of the service.');focusEl('f-date');return;}
+    var hours=num(val('f-hours'));
+    if(hours===null||hours<0){toast('Enter the print hours at the time of service.');focusEl('f-hours');return;}
+    t.lastDate=date;t.lastHours=hours;
+    if(hours>p.hours)p.hours=hours;
+    var log={id:uid('l'),printerId:p.id,taskId:t.id,taskName:t.name,date:date,hours:hours,note:val('f-note').trim(),createdAt:Date.now()};
+    state.logs.push(log);closeFormState();render();toast('Logged '+t.name+' on '+p.name+'.');
+    persist(async function(){await savePrinterDoc(p);await saveLogDoc(log);});
+  }
+};
+
+document.addEventListener('click',function(e){
+  var el=e.target.closest('[data-action]');if(!el)return;
+  var fn=handlers[el.dataset.action];if(fn)fn(el);
+});
+document.addEventListener('input',function(e){
+  var t=e.target;if(t.id&&t.id.indexOf('f-')===0)syncDraft(t);
+});
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.id&&t.id.indexOf('f-')===0)syncDraft(t);
+  var name=t.dataset&&t.dataset.change;
+  if(name&&changeHandlers[name])changeHandlers[name](t);
+});
+document.addEventListener('submit',function(e){
+  var f=e.target.closest('form[data-submit]');if(!f)return;
+  e.preventDefault();
+  var fn=submitHandlers[f.dataset.submit];if(fn)fn(f);
+});
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&state.status==='ready')render();
+});
+
+/* ---------- boot ---------- */
+document.getElementById('today').textContent='SERVICE BOARD · '+new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).replace(',','').toUpperCase();
+render();
+(async function boot(){
+  try{db=(window.claude&&typeof window.claude.use==='function')?await window.claude.use('db'):null;}catch(e){db=null;}
+  if(db){state.mode='db';subscribe();}
+  else{state.mode='local';loadLocal();state.status='ready';render();}
+})();
+})();
+</script>
+
+<script>
+if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
+  window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});
+}
+</script>
+</body>
+</html>
