@@ -76,6 +76,36 @@ flutter build macos --release
 
 The built app appears under `build/macos/Build/Products/Release/PrintTender.app`.
 
+#### Universal builds, and a second Mac
+
+Release builds are universal: `lipo -archs Contents/MacOS/PrintTender` reports
+`x86_64 arm64`, and every Mach-O in the bundle carries both. The same `.app`
+therefore runs on Apple Silicon and Intel Macs alike, requiring only macOS 12
+(`LSMinimumSystemVersion` = 12.0).
+
+Flutter controls this with `enable-macos-arm64-only`, false today but documented
+as flipping to true in a future release before Intel support is discontinued. It
+is pinned explicitly on this machine so an upgrade cannot silently drop it:
+
+```bash
+flutter config --no-enable-macos-arm64-only
+```
+
+Transferring the app to a second Mac trips Gatekeeper. It is signed ad-hoc with
+no Developer ID — `security find-identity -v -p codesigning` reports none — so
+AirDrop, Mail or a browser download stamps on `com.apple.quarantine` and macOS
+refuses to open it. Locally built it carries no quarantine and opens normally.
+To run it elsewhere:
+
+```bash
+# simplest: right-click the app in Finder and choose Open, once
+xattr -dr com.apple.quarantine /Applications/PrintTender.app   # or strip it wholesale
+```
+
+Opening it properly would mean an Apple Developer membership for Developer ID
+signing plus notarization; without one, the above is the expected state of a
+personal app.
+
 ## Tests
 
 ```bash
