@@ -4,7 +4,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
-        android:label="printer_maintenance"
+        android:label="PrintTender"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

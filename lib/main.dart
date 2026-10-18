@@ -13,7 +13,7 @@ class PrinterMaintenanceApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Printer Maintenance',
+      title: 'PrintTender',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.system,
       theme: _buildTheme(Brightness.light),

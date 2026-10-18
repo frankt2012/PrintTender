@@ -1,5 +1,5 @@
 name: printer_maintenance
-description: "A new Flutter project."
+description: "PrintTender — 3D printer maintenance tracker. Local, offline, no account."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -61,6 +61,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   path_provider_platform_interface: ^2.1.3
   plugin_platform_interface: ^2.1.8
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -103,3 +104,19 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Generates every launcher icon from assets/icon/printtender-icon.png.
+#
+# The same picture is used as the adaptive-icon foreground *and* background so
+# that the launcher's rounded-square mask crops into more of the design rather
+# than exposing a coloured corner behind it. Regenerate with:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: false # no iOS target in this project
+  macos:
+    generate: true
+    image_path: "assets/icon/printtender-icon.png"
+  image_path: "assets/icon/printtender-icon.png"
+  adaptive_icon_foreground: "assets/icon/printtender-icon.png"
+  adaptive_icon_background: "assets/icon/printtender-icon.png"
