@@ -157,8 +157,16 @@ lib/
       task_definitions_screen.dart maintenance library CRUD
 assets/
   icon/
-    printtender-icon.png         1024×1024 source for the icon generator
-    printtender-icon-source.jpg  the original artwork, kept as-is
+    PrintTender Round.png    Android artwork as supplied, 1024×1024
+    PrintTender Square.png   macOS artwork as supplied, 1024×1024
+    printtender-round.png    Round with real alpha — what the generator reads
+    printtender-square.png   Square with real alpha — what the generator reads
+    printtender-icon.png     superseded first attempt, no longer referenced
+    printtender-icon-source.jpg  that attempt's original artwork, kept as-is
+tool/
+  icon_probe.swift          derives adaptive-icon settings from a source image
+  restore_alpha.swift       recovers transparency lost to a JPEG export
+  alpha_grid.swift          renders an alpha channel as a 16×16 text grid
 ```
 
 ## Naming and icons
@@ -176,40 +184,52 @@ do *not* follow it:
   That is how the importer recognises its own files; changing it would make every
   backup already exported fail validation.
 
-Launcher icons are generated, never hand-edited. Edit the source image and run:
+Launcher icons are generated, never hand-edited. Two images feed the generator —
+Round for Android, Square for macOS — and each has to carry real alpha first:
 
 ```sh
+swift tool/restore_alpha.swift "assets/icon/PrintTender Round.png" assets/icon/printtender-round.png
+swift tool/restore_alpha.swift "assets/icon/PrintTender Square.png" assets/icon/printtender-square.png
 dart run flutter_launcher_icons
 ```
 
-That produces the five Android densities twice over (the legacy `mipmap` bitmap for
-pre-8.0 launchers and the `mipmap-anydpi-v26` adaptive icon), the full macOS
-`AppIcon.appiconset`, and nothing else.
+`restore_alpha` exists because JPEG cannot store transparency: exporting a
+transparent image to JPEG flattens it and renders that transparency as a visible
+checkerboard, which is exactly what both supplied files contained. Used as-is
+they would have shipped an icon with a checkerboard border. The script keys it
+back out — a pixel is a candidate only if it is neutral grey *and* bright,
+matching the two checkerboard tones, and candidates are then flood-filled from
+the image border so tinted artwork inside the design is never reached however
+pale it gets. It prints the coverage it recovered; `tool/alpha_grid.swift`
+dumps the result as a 16×16 opacity grid so the shape can be checked before
+trusting it.
 
-The adaptive icon has two settings worth understanding. The artwork is a badge on a
-perfectly flat `#010101` field occupying the central 93% of the square, so:
+`dart run flutter_launcher_icons` then produces the five Android densities twice
+over (the legacy `mipmap` bitmap for pre-8.0 launchers and the
+`mipmap-anydpi-v26` adaptive icon) plus the full macOS `AppIcon.appiconset`.
 
-- **`adaptive_icon_foreground_inset: 24`** — at the default of 16 the badge
-  measures ~68dp on the 108dp adaptive canvas, wider than Android's 66dp safe
-  zone, so the launcher's mask sliced the badge's rounded corners. 24 brings it to
-  ~52dp, inside any mask shape. Raise it to shrink the badge further; lower it to
-  let it fill more of the tile.
-- **`adaptive_icon_background: "#010101"`** — a flat colour rather than the
-  picture itself. Whatever the mask reveals beyond the badge is then the same
-  black the badge already sits on, so there is no visible seam regardless of which
-  launcher shape is in use.
+Two adaptive-icon settings are worth understanding:
 
-To re-measure after swapping in different artwork — and re-derive the two values
-above rather than inheriting them — run:
+- **`adaptive_icon_foreground_inset: 18`** — Android guarantees only a 66dp
+  circle at the centre of the 108dp canvas stays visible; the launcher masks the
+  rest away. The roundel measures 93% of its square, so at the default 16% inset
+  it would be 68.4dp wide and its own outer edge would be sliced off. 18% lands
+  it at 64.4dp, inside the safe zone. Raise it to shrink the roundel, lower it
+  to fill more of the tile.
+- **`adaptive_icon_background: "#FFFFFF"`** — an opaque layer, which the adaptive
+  format requires. It shows through the roundel's transparent margin as a thin
+  white halo wherever the launcher's mask reaches past the artwork.
+
+To re-derive both values from a new source image rather than inheriting them:
 
 ```sh
-swift tool/icon_probe.swift assets/icon/printtender-icon.png
+swift tool/icon_probe.swift assets/icon/printtender-round.png
 ```
 
-It reports the field colour, the flatness of the edges (a mean deviation near 0
-means the border is a solid colour, so a flat adaptive background is seamless;
-a large value means artwork runs to the edge and the picture itself is the safer
-background), and the bounding box of the content as a percentage of the square.
+It reports opaque coverage, the extent and centring of the design, and the
+smallest inset that keeps it inside the 66dp safe zone. Given an image *without*
+alpha it instead reports the edge colour and how flat it is, which is what
+decides whether a flat adaptive background will sit seamlessly behind it.
 
 ## How the due-date maths works
 

@@ -105,25 +105,30 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 
-# Generates every launcher icon from assets/icon/printtender-icon.png.
+# Generates every launcher icon from the two source images in assets/icon/.
 #
-# The artwork is a badge on a perfectly flat #010101 field, occupying the
-# central 93% of the square. At the default 16% foreground inset the badge
-# measures ~68dp on a 108dp adaptive canvas, which is wider than Android's
-# 66dp safe zone — so the launcher's mask was slicing the badge's rounded
-# corners. 24% inset brings it to ~52dp, comfortably inside any mask.
+# Android gets printtender-round.png as the adaptive foreground. The artwork is
+# a roundel with radius ~477/512 of the square, so at an 18% inset it measures
+# ~64dp on the 108dp adaptive canvas — inside Android's 66dp safe zone, so the
+# launcher's mask never slices the roundel's own edge. The flat white background
+# shows through the artwork's transparent margin as a thin halo wherever the mask
+# reaches further than the roundel does.
 #
-# The background is a flat colour matching the artwork's own field rather
-# than the picture itself, so whatever the mask reveals around the badge is
-# the same black the badge already sits on. Regenerate with:
+# macOS gets printtender-square.png, which needs no inset: macOS does not mask
+# app icons, so the transparent border simply lets the badge float on the Dock.
+#
+# Both sources were exported to JPEG, which flattened their transparency into a
+# visible checkerboard; tool/restore_alpha.swift keys that back out. Regenerate
+# with:
+#   swift tool/restore_alpha.swift <in> <out>   # after re-exporting a source
 #   dart run flutter_launcher_icons
 flutter_launcher_icons:
   android: true
   ios: false # no iOS target in this project
   macos:
     generate: true
-    image_path: "assets/icon/printtender-icon.png"
-  image_path: "assets/icon/printtender-icon.png"
-  adaptive_icon_foreground: "assets/icon/printtender-icon.png"
-  adaptive_icon_background: "#010101"
-  adaptive_icon_foreground_inset: 24
+    image_path: "assets/icon/printtender-square.png"
+  image_path: "assets/icon/printtender-round.png"
+  adaptive_icon_foreground: "assets/icon/printtender-round.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground_inset: 18
