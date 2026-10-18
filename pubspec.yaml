@@ -109,10 +109,18 @@ flutter:
 #
 # Android gets printtender-round.png as the adaptive foreground. The artwork is
 # a roundel with radius ~477/512 of the square, so at an 18% inset it measures
-# ~64dp on the 108dp adaptive canvas — inside Android's 66dp safe zone, so the
-# launcher's mask never slices the roundel's own edge. The flat white background
-# shows through the artwork's transparent margin as a thin halo wherever the mask
-# reaches further than the roundel does.
+# ~64dp on the 108dp adaptive canvas and at 16% ~68.4dp.
+#
+# Android only guarantees a 66dp circle at the centre stays visible, but the
+# launcher's actual mask is wider than that and is a squircle rather than a
+# circle — confirmed by the earlier square badge, which at 68.3dp was clipped
+# only "a little" at the corners, whereas a strict 66dp circular mask would have
+# taken ~15dp off them. A circle inscribed at a squircle's full width is tangent
+# along the axes and clears the mask's rounded corners entirely, so a roundel can
+# sit at that width and stay round. 16% lands it at 68.4dp.
+#
+# Keep the roundel at or below the mask width: beyond it the mask's own shape
+# takes over and the icon stops looking circular.
 #
 # macOS gets printtender-square.png, which needs no inset: macOS does not mask
 # app icons, so the transparent border simply lets the badge float on the Dock.
@@ -131,4 +139,4 @@ flutter_launcher_icons:
   image_path: "assets/icon/printtender-round.png"
   adaptive_icon_foreground: "assets/icon/printtender-round.png"
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground_inset: 18
+  adaptive_icon_foreground_inset: 16

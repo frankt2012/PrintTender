@@ -210,12 +210,17 @@ over (the legacy `mipmap` bitmap for pre-8.0 launchers and the
 
 Two adaptive-icon settings are worth understanding:
 
-- **`adaptive_icon_foreground_inset: 18`** — Android guarantees only a 66dp
-  circle at the centre of the 108dp canvas stays visible; the launcher masks the
-  rest away. The roundel measures 93% of its square, so at the default 16% inset
-  it would be 68.4dp wide and its own outer edge would be sliced off. 18% lands
-  it at 64.4dp, inside the safe zone. Raise it to shrink the roundel, lower it
-  to fill more of the tile.
+- **`adaptive_icon_foreground_inset: 16`** — how large the roundel reads. Android
+  guarantees only a 66dp circle at the centre of the 108dp canvas stays visible,
+  but the real mask is a squircle wider than that: the earlier square badge sat at
+  68.3dp and was clipped only *slightly* at the corners, where a strict 66dp
+  circular mask would have taken ~15dp off them. A circle inscribed at a
+  squircle's full width is tangent along the axes and clears its rounded corners
+  entirely, so a roundel can sit at that width and stay circular. The roundel is
+  93% of its square, so 16% puts it at 68.4dp and 18% at 64.4dp. Lower the value
+  to grow the roundel, raise it to shrink it — but keep it at or below the mask
+  width, past which the mask's own shape takes over and the icon stops looking
+  round.
 - **`adaptive_icon_background: "#FFFFFF"`** — an opaque layer, which the adaptive
   format requires. It shows through the roundel's transparent margin as a thin
   white halo wherever the launcher's mask reaches past the artwork.
