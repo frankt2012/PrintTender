@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 import '../../data/models.dart';
 import '../../data/repositories.dart';
@@ -168,7 +169,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final backup = BackupService();
     try {
       final json = backup.encode(await backup.snapshot());
-      await shareBackupFile(json: json, fileName: backup.suggestedFileName());
+      final fileName = backup.suggestedFileName();
+      final saved = await shareBackupFile(json: json, fileName: fileName);
+      if (!mounted || saved == null) return;
+      showSnack(context, 'Backup saved to ${p.basename(saved)}.');
     } catch (error) {
       if (!mounted) return;
       showSnack(context, 'Could not export: $error');
@@ -277,7 +281,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final scaffold = Scaffold(
       appBar: AppBar(
-        title: const Text('Printer Maintenance'),
+        title: const Text('PrintTender'),
         actions: <Widget>[
           if (isDesktop && _selectedPrinterId == null)
             Padding(
