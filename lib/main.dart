@@ -31,21 +31,27 @@ class PrinterMaintenanceApp extends StatelessWidget {
       useMaterial3: true,
       colorScheme: scheme,
       visualDensity: VisualDensity.adaptivePlatformDensity,
-      scaffoldBackgroundColor: scheme.surface,
+      scaffoldBackgroundColor: scheme.surfaceContainerLow,
       appBarTheme: AppBarTheme(
-        backgroundColor: scheme.surface,
-        surfaceTintColor: scheme.surfaceTint,
-        elevation: 0,
-        scrolledUnderElevation: 0,
+        backgroundColor: scheme.surfaceContainer,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0.25,
+        scrolledUnderElevation: 0.25,
         centerTitle: false,
-        toolbarHeight: 42,
+        toolbarHeight: 38,
+        titleTextStyle: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: scheme.onSurface,
+        ),
       ),
       cardTheme: CardThemeData(
-        elevation: 0.5,
+        elevation: 0,
+        color: scheme.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           side: BorderSide(
-            color: scheme.outlineVariant.withValues(alpha: 0.4),
+            color: scheme.outlineVariant.withValues(alpha: 0.5),
             width: 0.5,
           ),
         ),
@@ -53,6 +59,12 @@ class PrinterMaintenanceApp extends StatelessWidget {
       listTileTheme: const ListTileThemeData(
         dense: true,
         visualDensity: VisualDensity.compact,
+        minVerticalPadding: 6,
+      ),
+      dividerTheme: DividerThemeData(
+        color: scheme.outlineVariant.withValues(alpha: 0.4),
+        space: 1,
+        thickness: 0.5,
       ),
       snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
     );
