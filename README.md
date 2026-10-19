@@ -25,8 +25,47 @@ SQLite database on the device — no account, no server, fully offline.
 - **History & costs** — per-printer history plus a running total of parts spend.
 - **Backup** — export the whole database to a JSON file through the system share
   sheet (Save to Files, Drive, email, …) and restore it from a file picker.
+- **A Mac app rather than a phone app stretched** — on macOS the dashboard is a
+  source list of printers beside a content well, the menus are in the menu bar
+  with keyboard shortcuts, the add/edit/picker flows are sheets, and the window
+  has a unified title bar. See [The macOS app](#the-macos-app).
+- **Year board** — a calendar grid of the year's maintenance, on the desktop
+  targets only, showing what was logged when and what the schedules have coming.
 
-## Requirements (already set up on this machine)
+## Screenshots
+
+Taken in both appearances, with a demo workshop rather than real data. The desktop
+build restyles Material to look like AppKit; on a phone it keeps the stock Material
+look.
+
+| Dark | Light |
+|---|---|
+| ![Dashboard in dark mode: four printers, five tasks overdue, $85.20 parts spend](docs/screenshots/macos-dashboard-dark.png) | ![The same dashboard in light mode](docs/screenshots/macos-dashboard-light.png) |
+| ![The Voron 2.4 350's schedule pane in dark mode](docs/screenshots/macos-printer-dark.png) | ![The same schedule pane in light mode](docs/screenshots/macos-printer-light.png) |
+| ![The maintenance library sheet in dark mode](docs/screenshots/macos-library-dark.png) | ![The maintenance library sheet in light mode](docs/screenshots/macos-library-light.png) |
+
+History keeps what each job cost, per printer:
+
+![Per-printer history listing parts used and cost per job](docs/screenshots/macos-history-dark.png)
+
+Logging a job, from a printer's pane or straight off the dashboard:
+
+![The log-entry sheet with a job title typed in](docs/screenshots/macos-log-entry-dark.png)
+
+The year board, desktop only:
+
+![The year board: a twelve-month strip above every schedule's due date](docs/screenshots/macos-year-board-dark.png)
+
+The same workshop on a phone:
+
+| Dark | Light |
+|---|---|
+| ![The Android dashboard in dark mode](docs/screenshots/android-dashboard-dark.png) | ![The Android dashboard in light mode](docs/screenshots/android-dashboard-light.png) |
+
+## Requirements
+
+Any recent Flutter 3.x will do; these are the versions this was built and
+tested against, and the paths they live at here.
 
 | Tool | Version | Location |
 |---|---|---|
@@ -110,7 +149,7 @@ personal app.
 
 ```bash
 flutter analyze     # static analysis, currently clean
-flutter test        # 58 tests, all passing
+flutter test        # 75 tests, all passing
 ```
 
 Coverage:
@@ -137,6 +176,18 @@ Coverage:
   nothing needs attention, how an overdue / due-soon / never-done schedule reads as
   a line of text, the cap that turns a long list into a count, and the equality
   that lets an unchanged list skip being rescheduled.
+- `test/macos_ui_test.dart` — the desktop-only shell: the theme is built around the
+  system font and accent, `pushPage` lays a page out as a floating sheet rather than
+  a full screen, the sheet button bar cancels, saves and refuses both while busy,
+  and the sidebar highlights exactly one row.
+- `test/macos_pane_test.dart` — the embedded printer pane: its header costs a
+  fraction of the height of the screen it replaced (152px against 318px), the
+  schedule and history panes switch, every reading fits on one bar, and nothing
+  overflows at the narrowest window the app allows.
+- `test/appearance_test.dart` — measures WCAG contrast against the built themes in
+  both appearances. The status colours, the error colour, the untouched badge and
+  the chip fills all stay legible in light mode, while dark mode keeps the exact
+  values it was designed with.
 
 The widget tests point the app at an in-memory database via two test hooks on
 `AppDatabase` (`factoryOverride`, `pathOverride`). File-backed SQLite never
@@ -175,16 +226,22 @@ lib/
   services/
     due_status.dart               OK / due-soon / overdue evaluation
     backup.dart                   snapshot / encode / decode / restore
-    backup_io.dart                share sheet (export) and file picker (import)
+    backup_io.dart                save panel (export) and file picker (import)
     notifications.dart            the morning "needs attention" digest
   ui/
+    macos_theme.dart              AppKit-flavoured theme, platform helpers
+    mac_sidebar.dart              the desktop source list of printers
+    mac_controls.dart             segmented control, sheet button bar
+    routes.dart                   pushPage: a sheet on desktop, a page elsewhere
     widgets.dart                  shared badges, progress bars, stat cards
     screens/
       dashboard_screen.dart       fleet overview, attention list, backup, digest
-      printer_detail_screen.dart  per-printer schedule + history
+      printer_detail_screen.dart  per-printer schedule + history, embedded on desktop
       edit_printer_screen.dart    add / edit a printer
       add_log_entry_screen.dart   record maintenance
       task_definitions_screen.dart maintenance library CRUD
+docs/
+  screenshots/                    the images used in this README
 assets/
   icon/
     PrintTender Round.png    Android artwork as supplied, 1024×1024
@@ -316,6 +373,36 @@ which installs the eight core tasks and marks them as serviced today, so a
 freshly-added machine does not open with a wall of overdue alarms. Tasks you assign
 by hand still count as never done, and therefore overdue, until you log them once.
 
+## The macOS app
+
+The desktop build is styled to look native rather than like a phone app in a window.
+The widgets are still Material, restyled: a unified title bar with the traffic lights
+inset into a 28px strip, `.AppleSystemUIFont` throughout, and the system accent
+colour supplying the blue.
+
+- **A source list, not a drawer.** Printers live in a sidebar, badged when they need
+  attention; picking one opens its schedules and history in the pane beside it
+  without leaving the window.
+- **Menus in the menu bar**, with the shortcuts you would expect: ⌘N add printer,
+  ⌘L maintenance library, ⌘E export, ⌘I import, ⌘1 schedule, ⌘2 history.
+- **Sheets for the modal flows** — add/edit printer, log entry, maintenance library —
+  dropping in over the window instead of replacing it.
+- **A compact pane header.** The printer header is a single 152px bar carrying the
+  name, serial and purchase date, nozzle and plate, the schedule/history switch and
+  the actions. Both panes keep their scroll position when you switch.
+- **A window that remembers itself** — opens at 1180×820, never smaller than
+  900×620, and restores its own frame between launches.
+- **Light and dark, both designed.** Dark uses Apple's system red, amber and green
+  unchanged; light uses darker variants of the same hues, worth 5.3:1 or better on
+  white, because the system colours land near 2.2:1 there and are hard to read.
+- **Year board**, desktop only: the year as a grid of days, showing what was logged
+  and what the schedules have coming.
+
+A true native-controls port (AppKit widgets rather than restyled Material ones) was
+considered and deliberately not attempted: it would have meant rewriting every screen
+and putting the Android look at risk. The restyle buys most of the feel for far less
+scope.
+
 ## Notifications
 
 Reminders are local and scheduled on the device — no server, and the app stays
@@ -348,16 +435,16 @@ Build plate on Prusa MK4 is due soon
   and a reminder does not need the second it fires in.
 - **Survives a reboot** through the plugin's boot receiver (`RECEIVE_BOOT_COMPLETED`
   in the manifest), and is re-registered every time the app opens.
-- Implemented for Android now; the same code path covers macOS once the app
-  builds there.
+- **Both platforms.** The same code path schedules the digest on Android and on
+  macOS, where it has been verified end to end from a clean install.
 
 ## Notes
 
 - **Desktop SQLite:** the `sqflite` plugin is mobile-only, so on macOS the app
   initialises `sqflite_common_ffi` and drives the OS SQLite library directly.
 - **Storage location:** on macOS the database lives inside the sandbox container at
-  `~/Library/Containers/<bundle-id>/Data/Library/Application Support/…`; on Android
-  it lives in the app's private data directory.
+  `~/Library/Containers/com.franktriolo.printerMaintenance/Data/Library/Application Support/…`;
+  on Android it lives in the app's private data directory.
 - **Schema upgrades:** the schema is versioned and upgraded in place on open. Going
   from a v1 database renames the original eight seeded tasks (so any schedules
   already attached to them keep working) and then inserts whatever the full library
@@ -370,6 +457,9 @@ Build plate on Prusa MK4 is due soon
   computed. A task that comes due while the app is closed is reported the next
   time the app opens, and a failure to schedule is logged rather than shown — it
   must never turn a working dashboard into an error screen.
+- **Backups on desktop** go through an ordinary save panel, so the file lands where
+  you choose. There is no save panel on Android, so the export goes out through the
+  system share sheet instead ("Save to Files", Drive, email, …).
 - **No sync.** Each device keeps its own database by design. Point both at a shared
   cloud database later if you want them in step.
 - The maintenance library and the months-based intervals were inspired by
@@ -382,3 +472,7 @@ Build plate on Prusa MK4 is due soon
 - Spare-parts inventory with stock levels and reorder thresholds.
 - Import print sessions from slicer history to advance the odometer automatically.
 - Cloud sync (Supabase or similar).
+
+## Licence
+
+[MIT](LICENSE) © 2026 Frank Triolo.

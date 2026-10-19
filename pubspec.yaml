@@ -4,6 +4,10 @@ description: "PrintTender — 3D printer maintenance tracker. Local, offline, no
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
+# Where the source lives, for anyone reading the package metadata.
+repository: https://github.com/frankt2012/PrintTender
+issue_tracker: https://github.com/frankt2012/PrintTender/issues
+
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
 # followed by an optional build number separated by a +.
