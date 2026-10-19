@@ -5,16 +5,25 @@ import '../services/due_status.dart';
 import 'macos_theme.dart';
 
 Color dueColor(BuildContext context, DueLevel level) {
-  final scheme = Theme.of(context).colorScheme;
+  final theme = Theme.of(context);
+  final scheme = theme.colorScheme;
+  // macOS wears a different set of these in each appearance; see MacColors.
+  final brightness = theme.brightness;
   switch (level) {
     case DueLevel.overdue:
       return scheme.error;
     case DueLevel.dueSoon:
-      return isMacOS ? MacColors.orange : const Color(0xFFB26A00);
+      return isMacOS
+          ? MacColors.orangeFor(brightness)
+          : const Color(0xFFB26A00);
     case DueLevel.ok:
-      return isMacOS ? MacColors.green : const Color(0xFF2E7D32);
+      return isMacOS
+          ? MacColors.greenFor(brightness)
+          : const Color(0xFF2E7D32);
     case DueLevel.unscheduled:
-      return scheme.outline;
+      // Not the separator colour: on macOS `outline` is the hairline grey
+      // (#D7D7D7), which is a badge label nobody can read in either appearance.
+      return isMacOS ? scheme.onSurfaceVariant : scheme.outline;
   }
 }
 

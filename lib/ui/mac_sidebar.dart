@@ -153,7 +153,7 @@ class MacSidebarBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tint = color ?? MacColors.red;
+    final tint = color ?? MacColors.redFor(Theme.of(context).brightness);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
@@ -171,3 +171,4 @@ class MacSidebarBadge extends StatelessWidget {
     );
   }
 }
+

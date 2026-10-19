@@ -8,6 +8,21 @@ import 'package:flutter/material.dart';
 /// widgets do.
 bool get isMacOS => defaultTargetPlatform == TargetPlatform.macOS;
 
+/// The fill behind the small chips the macOS printer pane is built from.
+///
+/// Android draws those as a tint on a large Material surface, and does here
+/// too. On macOS they sit on the chrome: the dark chrome of #323232 takes the
+/// same tint, but the light one is #ECECEC, and a tint two steps off that reads
+/// as no chip at all. So in light mode the chip is a white plate — the surface
+/// the cards around it already use.
+Color macChipFill(ThemeData theme) {
+  final tint = theme.colorScheme.surfaceContainerHighest.withValues(
+    alpha: 0.55,
+  );
+  if (!isMacOS) return tint;
+  return theme.brightness == Brightness.dark ? tint : theme.colorScheme.surface;
+}
+
 /// True on any platform with a pointer, a keyboard and a big window — the
 /// places where a dense, desktop-shaped layout makes sense.
 bool get isDesktop =>
@@ -38,10 +53,30 @@ abstract final class MacColors {
   static const Color secondaryLabelDark = Color(0xFF9A9A9E);
 
   /// The status colours behind the due badges.
+  ///
+  /// AppKit's `systemRed`, `systemOrange` and `systemGreen` are the ones above
+  /// in each appearance — the `…Light` values rather than these in light mode,
+  /// because these were drawn for a dark window. On white they measure 3.6:1,
+  /// 2.2:1 and 2.2:1, and these carry the small badge label, which wants 4.5:1.
+  /// The light values are Apple's increased-contrast ones, with the green taken
+  /// a shade darker than `#248A3D` so it also reads on the grey chrome.
   static const Color red = Color(0xFFFF3B30);
   static const Color orange = Color(0xFFFF9500);
   static const Color green = Color(0xFF34C759);
   static const Color gray = Color(0xFF8E8E93);
+
+  static const Color redLight = Color(0xFFD70015);
+  static const Color orangeLight = Color(0xFFC93400);
+  static const Color greenLight = Color(0xFF1F7A33);
+
+  static Color redFor(Brightness brightness) =>
+      brightness == Brightness.dark ? red : redLight;
+
+  static Color orangeFor(Brightness brightness) =>
+      brightness == Brightness.dark ? orange : orangeLight;
+
+  static Color greenFor(Brightness brightness) =>
+      brightness == Brightness.dark ? green : greenLight;
 }
 
 /// A Material theme dressed to look like AppKit: the system font, the system
@@ -70,7 +105,7 @@ ThemeData buildMacTheme(Brightness brightness) {
     onSurfaceVariant: secondary,
     outline: separator,
     outlineVariant: separator,
-    error: MacColors.red,
+    error: dark ? MacColors.red : MacColors.redLight,
     onError: Colors.white,
     surfaceContainerLowest: content,
     surfaceContainerLow: content,

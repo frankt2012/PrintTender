@@ -592,7 +592,7 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
                   icon: Icons.schedule,
                   value: '$dueSoon',
                   label: 'due soon',
-                  color: dueSoon > 0 ? MacColors.orange : null,
+                  color: dueSoon > 0 ? MacColors.orangeFor(theme.brightness) : null,
                 ),
                 if (printer.nozzleLabel.isNotEmpty)
                   _SetupChip(
@@ -880,7 +880,7 @@ class _SetupChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        color: macChipFill(theme),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -939,7 +939,7 @@ class _StatChip extends StatelessWidget {
     Widget chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        color: macChipFill(theme),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(

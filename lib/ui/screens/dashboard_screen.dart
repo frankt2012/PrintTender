@@ -425,7 +425,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (status == null) return null;
     if (status.overdue > 0) return MacSidebarBadge(count: status.overdue);
     if (status.dueSoon > 0) {
-      return MacSidebarBadge(count: status.dueSoon, color: MacColors.orange);
+      return MacSidebarBadge(
+        count: status.dueSoon,
+        color: MacColors.orangeFor(Theme.of(context).brightness),
+      );
     }
     return null;
   }
