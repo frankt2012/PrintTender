@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../services/due_status.dart';
+import '../routes.dart';
 import '../widgets.dart';
 import 'add_log_entry_screen.dart';
 import 'edit_printer_screen.dart';
@@ -85,7 +86,11 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
 
   Future<void> _editPrinter() async {
     final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => EditPrinterScreen(printer: _printer)),
+      pushPage(
+        (_) => EditPrinterScreen(printer: _printer),
+        maxWidth: 720,
+        maxHeight: 640,
+      ),
     );
     if (saved == true) {
       await _load();
@@ -137,8 +142,10 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
 
   Future<void> _addLogEntry() async {
     final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => AddLogEntryScreen(initialPrinter: _printer),
+      pushPage(
+        (_) => AddLogEntryScreen(initialPrinter: _printer),
+        maxWidth: 760,
+        maxHeight: 660,
       ),
     );
     if (saved == true) await _load();

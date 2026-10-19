@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../data/models.dart';
 import '../../data/repositories.dart';
+import '../mac_controls.dart';
+import '../macos_theme.dart';
 import '../widgets.dart';
 
 /// Records a maintenance job. Optionally pre-filled with a printer and one of
@@ -220,11 +222,26 @@ class _AddLogEntryScreenState extends State<AddLogEntryScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        body: const Center(child: CircularProgressIndicator()),
+        bottomNavigationBar: isMacOS
+            ? MacSheetButtonBar(
+                onCancel: () => Navigator.of(context).pop(),
+              )
+            : null,
+      );
     }
     if (_printerOptions.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Log maintenance')),
+        appBar: AppBar(
+          title: const Text('Log maintenance'),
+          automaticallyImplyLeading: !isMacOS,
+        ),
+        bottomNavigationBar: isMacOS
+            ? MacSheetButtonBar(
+                onCancel: () => Navigator.of(context).pop(),
+              )
+            : null,
         body: const EmptyState(
           icon: Icons.print_disabled_outlined,
           title: 'No printers',
@@ -236,11 +253,22 @@ class _AddLogEntryScreenState extends State<AddLogEntryScreen> {
     final printer = _printer;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Log maintenance')),
+      appBar: AppBar(
+        title: const Text('Log maintenance'),
+        automaticallyImplyLeading: !isMacOS,
+      ),
+      bottomNavigationBar: isMacOS
+          ? MacSheetButtonBar(
+              onCancel: () => Navigator.of(context).pop(),
+              onDone: _save,
+              doneLabel: 'Save Entry',
+              busy: _saving,
+            )
+          : null,
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, isMacOS ? 16 : 96),
           children: [
             DropdownButtonFormField<int>(
               initialValue: _selectedPrinterId,
@@ -388,7 +416,7 @@ class _AddLogEntryScreenState extends State<AddLogEntryScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            FilledButton.icon(
+            if (!isMacOS) FilledButton.icon(
               onPressed: _saving ? null : _save,
               icon: _saving
                   ? const SizedBox(

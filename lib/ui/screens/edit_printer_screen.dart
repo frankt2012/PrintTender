@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../data/task_library.dart';
+import '../mac_controls.dart';
+import '../macos_theme.dart';
 import '../widgets.dart';
 
 /// Create or edit a printer. Returns `true` from [Navigator.pop] on save.
@@ -131,11 +133,22 @@ class _EditPrinterScreenState extends State<EditPrinterScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit printer' : 'Add printer'),
+        // A sheet's buttons live in its bottom bar, so the title bar does not
+        // also offer a back chevron.
+        automaticallyImplyLeading: !isMacOS,
       ),
+      bottomNavigationBar: isMacOS
+          ? MacSheetButtonBar(
+              onCancel: () => Navigator.of(context).pop(),
+              onDone: _save,
+              doneLabel: _isEditing ? 'Save' : 'Add Printer',
+              busy: _saving,
+            )
+          : null,
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, isMacOS ? 16 : 96),
           children: [
             TextFormField(
               controller: _name,
@@ -280,7 +293,7 @@ class _EditPrinterScreenState extends State<EditPrinterScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            FilledButton.icon(
+            if (!isMacOS) FilledButton.icon(
               onPressed: _saving ? null : _save,
               icon: _saving
                   ? const SizedBox(

@@ -10,6 +10,7 @@ import '../../services/notifications.dart';
 import '../mac_controls.dart';
 import '../mac_sidebar.dart';
 import '../macos_theme.dart';
+import '../routes.dart';
 import '../widgets.dart';
 import 'add_log_entry_screen.dart';
 import 'edit_printer_screen.dart';
@@ -142,15 +143,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _addPrinter() async {
-    final saved = await Navigator.of(
-      context,
-    ).push<bool>(MaterialPageRoute(builder: (_) => const EditPrinterScreen()));
+    final saved = await Navigator.of(context).push<bool>(
+      pushPage(
+        (_) => const EditPrinterScreen(),
+        maxWidth: 720,
+        maxHeight: 620,
+        name: 'add-printer',
+      ),
+    );
     if (saved == true) await _load();
   }
 
   Future<void> _openLibrary() async {
-    await Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => const TaskDefinitionsScreen()));
+    await Navigator.of(context).push(
+      pushPage((_) => const TaskDefinitionsScreen(), name: 'library'),
+    );
     await _load();
   }
 
@@ -254,11 +261,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _logFor(Printer printer, [PrinterTask? schedule]) async {
     final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => AddLogEntryScreen(
+      pushPage(
+        (_) => AddLogEntryScreen(
           initialPrinter: printer,
           initialSchedule: schedule,
         ),
+        maxWidth: 760,
+        maxHeight: 660,
       ),
     );
     if (saved == true) await _load();

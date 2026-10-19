@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../services/due_status.dart';
+import '../mac_controls.dart';
+import '../macos_theme.dart';
 import '../widgets.dart';
 
 /// CRUD for the shared library of maintenance task definitions.
@@ -65,12 +67,31 @@ class _TaskDefinitionsScreenState extends State<TaskDefinitionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Maintenance library')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openEditor(),
-        icon: const Icon(Icons.add),
-        label: const Text('New task'),
+      appBar: AppBar(
+        title: const Text('Maintenance library'),
+        automaticallyImplyLeading: !isMacOS,
+        actions: <Widget>[
+          // A floating action button would look wrong inside a macOS sheet;
+          // iOS-style "+" in the title bar is where Mac puts it.
+          if (isMacOS)
+            IconButton(
+              tooltip: 'New task',
+              icon: const Icon(Icons.add),
+              onPressed: () => _openEditor(),
+            ),
+          if (isMacOS) const SizedBox(width: 8),
+        ],
       ),
+      bottomNavigationBar: isMacOS
+          ? MacSheetButtonBar(onDone: () => Navigator.of(context).pop())
+          : null,
+      floatingActionButton: isMacOS
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _openEditor(),
+              icon: const Icon(Icons.add),
+              label: const Text('New task'),
+            ),
       body: FutureBuilder<List<MaintenanceTask>>(
         future: _future,
         builder: (context, snapshot) {
@@ -90,7 +111,7 @@ class _TaskDefinitionsScreenState extends State<TaskDefinitionsScreen> {
           }
           final items = _flatten(tasks);
           return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
+            padding: EdgeInsets.fromLTRB(12, 8, 12, isMacOS ? 12 : 96),
             itemCount: items.length,
             itemBuilder: (context, index) {
               final item = items[index];

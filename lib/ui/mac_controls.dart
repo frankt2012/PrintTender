@@ -1,5 +1,73 @@
 import 'package:flutter/material.dart';
 
+/// The button bar along the bottom of a macOS sheet: a hairline, then the
+/// sheet's actions on the right, with Cancel to the left of the default button.
+///
+/// AppKit puts a sheet's buttons here rather than in its title bar, so a screen
+/// shown inside a sheet hands its primary action to this bar and leaves its own
+/// inline button out.
+class MacSheetButtonBar extends StatelessWidget {
+  const MacSheetButtonBar({
+    super.key,
+    this.onCancel,
+    this.onDone,
+    this.doneLabel = 'Done',
+    this.busy = false,
+  });
+
+  /// Dismisses the sheet without saving. Leave null for a sheet that only has
+  /// a default action, such as a picker.
+  final VoidCallback? onCancel;
+
+  /// Runs the sheet's default action, which is what the blue button does.
+  final VoidCallback? onDone;
+
+  final String doneLabel;
+
+  /// While a save is in flight both buttons are disabled and the default button
+  /// shows a spinner in place of its label.
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainer,
+        border: Border(top: BorderSide(color: scheme.outline)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: <Widget>[
+            if (onCancel != null)
+              TextButton(
+                onPressed: busy ? null : onCancel,
+                child: const Text('Cancel'),
+              ),
+            if (onCancel != null && onDone != null) const SizedBox(width: 10),
+            if (onDone != null)
+              FilledButton(
+                onPressed: busy ? null : onDone,
+                child: busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(doneLabel),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// One choice in a [MacSegmentedControl].
 class MacSegment<T> {
   const MacSegment({required this.value, required this.label, this.icon});
