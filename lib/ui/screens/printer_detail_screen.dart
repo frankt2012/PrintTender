@@ -3,10 +3,16 @@ import 'package:flutter/material.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../services/due_status.dart';
+import '../mac_controls.dart';
+import '../macos_theme.dart';
 import '../routes.dart';
 import '../widgets.dart';
 import 'add_log_entry_screen.dart';
 import 'edit_printer_screen.dart';
+
+/// Marks the compact header the sidebar pane draws, so its height — and so the
+/// height it hands back to the task list — can be checked.
+const Key macPaneHeaderKey = ValueKey<String>('macPaneHeader');
 
 class PrinterDetailScreen extends StatefulWidget {
   const PrinterDetailScreen({
@@ -45,6 +51,10 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
   List<LogEntry> _entries = const <LogEntry>[];
   bool _loading = true;
   Object? _error;
+
+  /// Which pane the embedded header's segmented control has selected. Only the
+  /// sidebar layout uses it; the pushed screen keeps a real `TabBar`.
+  int _pane = 0;
 
   @override
   void initState() {
@@ -375,7 +385,8 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           if (printer != null) _buildEmbeddedHeader(context, printer),
-          Expanded(child: _buildBody(printer)),        ],
+          Expanded(child: _buildBody(printer, compact: true)),
+        ],
       );
     }
 
@@ -421,7 +432,7 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
     );
   }
 
-  Widget _buildBody(Printer? printer) {
+  Widget _buildBody(Printer? printer, {bool compact = false}) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return ErrorView(error: _error!, onRetry: _load);
     if (printer == null) {
@@ -429,6 +440,19 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
         icon: Icons.print_disabled_outlined,
         title: 'Not found',
         message: 'This printer is no longer in your workshop.',
+      );
+    }
+
+    final schedule = _buildScheduleTab(printer);
+    final history = _buildHistoryTab(printer);
+
+    // The sidebar pane spends its height on the list: the header above it
+    // already carries the printer's numbers *and* the switch between panes, so
+    // repeating them here would cost the list about 180px of window.
+    if (compact) {
+      return IndexedStack(
+        index: _pane,
+        children: <Widget>[schedule, history],
       );
     }
 
@@ -450,10 +474,7 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
           ),
           Expanded(
             child: TabBarView(
-              children: <Widget>[
-                _buildScheduleTab(printer),
-                _buildHistoryTab(printer),
-              ],
+              children: <Widget>[schedule, history],
             ),
           ),
         ],
@@ -461,40 +482,160 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
     );
   }
 
-  /// The pane header used when [PrinterDetailScreen.embedded]: the printer's
-  /// name and the actions that would otherwise live in the `AppBar`.
+  /// The pane header used when [PrinterDetailScreen.embedded].
+  ///
+  /// On a Mac the sidebar is only 216px, so the printer's name, its live
+  /// numbers and its actions are packed into one dense bar. The stacked header
+  /// card the pushed screen uses would cost the task list roughly 180px — a
+  /// quarter of the window — and it repeated the name that the sidebar is
+  /// already showing.
   Widget _buildEmbeddedHeader(BuildContext context, Printer printer) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 8, 4),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              printer.name,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+    final overdue = _overdueCount;
+    final dueSoon = _dueSoonCount;
+
+    return DecoratedBox(
+      key: macPaneHeaderKey,
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: theme.colorScheme.outline)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        printer.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (printer.subtitle.isNotEmpty)
+                        Text(
+                          printer.subtitle,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                MacSegmentedControl<int>(
+                  segments: const <MacSegment<int>>[
+                    MacSegment<int>(
+                      value: 0,
+                      label: 'Schedule',
+                      icon: Icons.checklist_rtl,
+                    ),
+                    MacSegment<int>(
+                      value: 1,
+                      label: 'History',
+                      icon: Icons.history,
+                    ),
+                  ],
+                  value: _pane,
+                  onChanged: (value) => setState(() => _pane = value),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _addLogEntry,
+                  icon: const Icon(Icons.add, size: 14),
+                  label: const Text('New Log Entry'),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Edit printer',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: _editPrinter,
+                ),
+                IconButton(
+                  tooltip: 'Delete printer',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _deletePrinter,
+                ),
+              ],
             ),
-          ),
-          OutlinedButton.icon(
-            onPressed: _addLogEntry,
-            icon: const Icon(Icons.add, size: 14),
-            label: const Text('New Log Entry'),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Edit printer',
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: _editPrinter,
-          ),
-          IconButton(
-            tooltip: 'Delete printer',
-            icon: const Icon(Icons.delete_outline),
-            onPressed: _deletePrinter,
-          ),
-        ],
+            const SizedBox(height: 8),
+            // Everything the header card would have stacked, in one wrapping
+            // strip. It reflows rather than overflowing at the window's
+            // minimum width.
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                _StatChip(
+                  icon: Icons.timer_outlined,
+                  value: '${formatHours(printer.totalPrintHours)} h',
+                  label: 'print hours',
+                  tooltip: 'Set print hours',
+                  onTap: _editHours,
+                ),
+                _StatChip(
+                  icon: overdue > 0
+                      ? Icons.error_outline
+                      : Icons.check_circle_outline,
+                  value: '$overdue',
+                  label: 'overdue',
+                  color: overdue > 0 ? theme.colorScheme.error : null,
+                ),
+                _StatChip(
+                  icon: Icons.schedule,
+                  value: '$dueSoon',
+                  label: 'due soon',
+                  color: dueSoon > 0 ? MacColors.orange : null,
+                ),
+                if (printer.nozzleLabel.isNotEmpty)
+                  _SetupChip(
+                    icon: Icons.print_outlined,
+                    label: 'Nozzle',
+                    value: printer.nozzleLabel,
+                  ),
+                if (printer.buildPlate != null)
+                  _SetupChip(
+                    icon: Icons.layers_outlined,
+                    label: 'Plate',
+                    value: printer.buildPlate!,
+                  ),
+                if (printer.serialNumber != null)
+                  _SetupChip(
+                    icon: Icons.tag,
+                    label: 'S/N',
+                    value: printer.serialNumber!,
+                  ),
+                if (printer.purchaseDate != null)
+                  _SetupChip(
+                    icon: Icons.shopping_bag_outlined,
+                    label: 'Bought',
+                    value: formatDate(printer.purchaseDate!),
+                  ),
+              ],
+            ),
+            if (printer.notes != null) ...[
+              const SizedBox(height: 8),
+              Tooltip(
+                message: printer.notes!,
+                child: Text(
+                  printer.notes!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -753,6 +894,80 @@ class _SetupChip extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compact pane header
+// ---------------------------------------------------------------------------
+
+/// One of the printer's live numbers, in the same footprint as a [_SetupChip]
+/// rather than a [StatCard].
+///
+/// The embedded pane header has to fit the same information into a single
+/// strip, because every pixel it takes comes out of the task list below it.
+class _StatChip extends StatelessWidget {
+  const _StatChip({
+    required this.icon,
+    required this.value,
+    required this.label,
+    this.color,
+    this.tooltip,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String value;
+  final String label;
+
+  /// Tints the whole chip when the number is worth noticing.
+  final Color? color;
+
+  final String? tooltip;
+
+  /// Makes the chip an editing affordance, which is what the print-hours
+  /// figure is for.
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final secondary = theme.colorScheme.onSurfaceVariant;
+
+    Widget chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 15, color: color ?? secondary),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(color: secondary),
+          ),
+        ],
+      ),
+    );
+
+    if (onTap != null) {
+      chip = MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(onTap: onTap, child: chip),
+      );
+    }
+    return Tooltip(message: tooltip ?? label, child: chip);
   }
 }
 
