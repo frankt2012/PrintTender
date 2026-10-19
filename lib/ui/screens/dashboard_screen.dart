@@ -40,7 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   List<Printer> _printersList = const <Printer>[];
   Map<int, PrinterStatus> _statuses = const <int, PrinterStatus>{};
-  Map<int, List<PrinterTask>> _schedules = const <int, List<PrinterTask>>{};
+  Map<int, List<PrinterTask>> _schedules = <int, List<PrinterTask>>{};
   List<AttentionItem> _attention = const <AttentionItem>[];
   List<LogEntry> _recent = const <LogEntry>[];
   Map<int, String> _printerNames = const <int, String>{};
