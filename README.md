@@ -4,6 +4,41 @@ A local-first maintenance tracker for 3D printers. Runs as a **native macOS desk
 app** and an **Android app** from a single Flutter codebase. All data lives in a
 SQLite database on the device — no account, no server, fully offline.
 
+## Download
+
+[![Latest release](https://img.shields.io/github/v/release/frankt2012/PrintTender?label=latest%20release&sort=semver)](https://github.com/frankt2012/PrintTender/releases/latest)
+
+Installers are attached to the [latest release](https://github.com/frankt2012/PrintTender/releases/latest):
+
+| Platform | File | Requirements |
+|---|---|---|
+| macOS | `PrintTender-<version>.dmg` | macOS 12 or later, Apple Silicon or Intel |
+| Android | `PrintTender-<version>.apk` | Android 7.0 or later, arm64-v8a / armeabi-v7a / x86_64 |
+
+### macOS: the first launch needs one extra step
+
+The app is not notarized — there is no Apple Developer ID behind it — so macOS
+quarantines anything downloaded and refuses to open it the first time. Either:
+
+1. Open the DMG, drag **PrintTender** onto **Applications**, then **right-click the
+   app in Finder and choose Open**, and confirm with **Open**. Once is enough;
+   after that it launches normally.
+2. Or clear the quarantine flag from Terminal, then open it as usual:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/PrintTender.app
+```
+
+Only a paid Apple Developer account, with Developer ID signing plus notarization,
+makes the app install without that step.
+
+### Android: allow the install
+
+The APK is signed with its own release key rather than the public Android debug key,
+so later versions install over it as updates. Android still asks you to allow
+installing from unknown apps the first time, and Play Protect may flag an app it
+does not recognise.
+
 ## What it does
 
 - **Printer inventory** — name, manufacturer, model, serial number, purchase date,
@@ -101,6 +136,33 @@ flutter build apk --release     # build an installable APK
 The APK lands at `build/app/outputs/flutter-apk/app-release.apk`. Copy it to the
 phone and install (enable "install unknown apps" for the file manager).
 
+#### Signing
+
+Release APKs are signed with a private keystore that is deliberately kept out of
+this repository. Gradle reads `android/key.properties` (git-ignored) for its path
+and passwords, and falls back to the debug key when that file is missing, so a
+fresh clone still builds. On a new machine:
+
+```bash
+keytool -genkeypair -v -keystore ~/keystores/printtender-release.jks \
+  -storetype JKS -alias printtender -keyalg RSA -keysize 2048 -validity 10000 \
+  -dname "CN=Your Name, O=PrintTender, C=US"
+```
+
+```properties
+# android/key.properties — never committed
+storePassword=…
+keyPassword=…
+keyAlias=printtender
+storeFile=/Users/you/keystores/printtender-release.jks
+```
+
+Back the keystore up somewhere safe. Without it you cannot sign an update that
+installs over copies already out there — Android refuses an upgrade whose signature
+changed. Continuous integration reads the same values from the
+`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and
+`ANDROID_KEY_PASSWORD` repository secrets.
+
 ### macOS desktop
 
 Requires full Xcode installed and selected:
@@ -171,6 +233,36 @@ Signing** in Keychain Access → Certificate Assistant, then use its name. It on
 grants a stable local identity; it is trusted nowhere else. Without an Apple
 Developer membership there is no Developer ID signing and no notarization, which
 is the expected state of a personal app.
+
+## Releases
+
+Pushing a tag publishes installers. The [release workflow](.github/workflows/release.yml)
+builds the signed APK on Linux and the DMG on a macOS runner, then attaches both to a
+GitHub Release named after the tag. Versions in the file names come from `pubspec.yaml`,
+so bump `version:` before tagging:
+
+```bash
+git tag v1.0.1 && git push origin v1.0.1
+```
+
+Running the workflow by hand (Actions → Release → Run workflow) builds the same two
+artifacts without publishing anything, which is a way to test the pipeline. The DMG it
+produces is signed ad-hoc; the re-signing described above is a per-machine convenience.
+
+To do it locally instead:
+
+```bash
+flutter build apk --release
+
+mkdir -p /tmp/stage
+ditto build/macos/Build/Products/Release/PrintTender.app /tmp/stage/PrintTender.app
+ln -s /Applications /tmp/stage/Applications
+hdiutil create -volname PrintTender -srcfolder /tmp/stage -ov -format UDZO \
+  PrintTender-1.0.1.dmg
+
+gh release create v1.0.1 --title "PrintTender 1.0.1" PrintTender-1.0.1.dmg \
+  build/app/outputs/flutter-apk/app-release.apk
+```
 
 ## Tests
 
