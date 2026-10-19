@@ -11,4 +11,4 @@ PRODUCT_NAME = PrintTender
 PRODUCT_BUNDLE_IDENTIFIER = com.franktriolo.printerMaintenance
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.franktriolo. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 Frank Triolo
