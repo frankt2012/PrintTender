@@ -8,9 +8,27 @@ import 'add_log_entry_screen.dart';
 import 'edit_printer_screen.dart';
 
 class PrinterDetailScreen extends StatefulWidget {
-  const PrinterDetailScreen({super.key, required this.printerId});
+  const PrinterDetailScreen({
+    super.key,
+    required this.printerId,
+    this.embedded = false,
+    this.onDeleted,
+    this.onChanged,
+  });
 
   final int printerId;
+
+  /// Render as a plain pane instead of a pushed route: no [Scaffold] or
+  /// `AppBar`, and the printer's own actions move into a header row. Used by
+  /// the macOS sidebar shell, where the detail lives beside the printer list.
+  final bool embedded;
+
+  /// Called instead of popping when an embedded detail deletes its printer.
+  final VoidCallback? onDeleted;
+
+  /// Called after an embedded detail changes the printer, so the surrounding
+  /// shell can refresh the names it is showing.
+  final VoidCallback? onChanged;
 
   @override
   State<PrinterDetailScreen> createState() => _PrinterDetailScreenState();
@@ -69,7 +87,10 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
     final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => EditPrinterScreen(printer: _printer)),
     );
-    if (saved == true) await _load();
+    if (saved == true) {
+      await _load();
+      widget.onChanged?.call();
+    }
   }
 
   Future<void> _deletePrinter() async {
@@ -96,7 +117,11 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
     if (confirmed != true) return;
     await _printers.delete(widget.printerId);
     if (!mounted) return;
-    Navigator.of(context).pop();
+    if (widget.embedded) {
+      widget.onDeleted?.call();
+    } else {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _editHours() async {
@@ -338,6 +363,15 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
   Widget build(BuildContext context) {
     final printer = _printer;
 
+    if (widget.embedded) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (printer != null) _buildEmbeddedHeader(context, printer),
+          Expanded(child: _buildBody(printer)),        ],
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(printer?.name ?? 'Printer'),
@@ -414,6 +448,44 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
                 _buildHistoryTab(printer),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The pane header used when [PrinterDetailScreen.embedded]: the printer's
+  /// name and the actions that would otherwise live in the `AppBar`.
+  Widget _buildEmbeddedHeader(BuildContext context, Printer printer) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 4),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              printer.name,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: _addLogEntry,
+            icon: const Icon(Icons.add, size: 14),
+            label: const Text('New Log Entry'),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Edit printer',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: _editPrinter,
+          ),
+          IconButton(
+            tooltip: 'Delete printer',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: _deletePrinter,
           ),
         ],
       ),

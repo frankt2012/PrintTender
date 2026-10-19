@@ -232,11 +232,20 @@ class StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = color ?? theme.colorScheme.primary;
+    // On macOS the page sits on grey chrome, so a panel needs a hairline and a
+    // white fill to read as raised. The translucent Material tint would
+    // disappear against the window background.
+    final mac = isMacOS;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(14),
+        color: mac
+            ? theme.colorScheme.surface
+            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(mac ? 6 : 14),
+        border: mac
+            ? Border.all(color: theme.colorScheme.outlineVariant)
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

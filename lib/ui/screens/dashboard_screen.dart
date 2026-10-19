@@ -8,6 +8,7 @@ import '../../services/backup_io.dart';
 import '../../services/due_status.dart';
 import '../../services/notifications.dart';
 import '../mac_controls.dart';
+import '../mac_sidebar.dart';
 import '../macos_theme.dart';
 import '../widgets.dart';
 import 'add_log_entry_screen.dart';
@@ -50,6 +51,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _loading = true;
   Object? _error;
   bool _showBoard = false;
+
+  /// Which printer the macOS sidebar has selected; `null` means the overview.
+  int? _selectedPrinterId;
 
   @override
   void initState() {
@@ -112,6 +116,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _totalCost = totalCost;
         _error = null;
         _loading = false;
+        // The sidebar may be pointing at a printer that was just deleted.
+        if (_selectedPrinterId != null &&
+            !printers.any((p) => p.id == _selectedPrinterId)) {
+          _selectedPrinterId = null;
+        }
       });
 
       // The dashboard recomputes this list on launch, after every edit and on
@@ -217,6 +226,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _openPrinter(int printerId) async {
+    // On macOS the detail lives in the pane beside the sidebar rather than on
+    // a pushed route, so "opening" a printer is just a change of selection.
+    if (isMacOS) {
+      setState(() => _selectedPrinterId = printerId);
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => PrinterDetailScreen(printerId: printerId),
@@ -255,7 +270,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text('Printer Maintenance'),
         actions: <Widget>[
-          if (isDesktop)
+          if (isDesktop && _selectedPrinterId == null)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: MacSegmentedControl<bool>(
@@ -325,11 +340,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: const Icon(Icons.add),
               label: const Text('Add printer'),
             ),
-      body: _buildBody(),
+      body: isMacOS ? _buildMacBody() : _buildBody(),
     );
 
     if (!isMacOS) return scaffold;
     return PlatformMenuBar(menus: _macMenus(), child: scaffold);
+  }
+
+  /// On macOS the dashboard is a sidebar plus a content well, the way a
+  /// Mac app is shaped: the printer list stays visible while you work.
+  Widget _buildMacBody() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        MacSidebar(
+          children: <Widget>[
+            MacSidebarSection(
+              title: 'Printers',
+              children: <Widget>[
+                MacSidebarTile(
+                  label: 'All Printers',
+                  icon: Icons.print_outlined,
+                  selected: _selectedPrinterId == null,
+                  onTap: () => setState(() => _selectedPrinterId = null),
+                  trailing: _overdueCount > 0
+                      ? MacSidebarBadge(count: _overdueCount)
+                      : null,
+                ),
+                for (final printer in _printersList)
+                  MacSidebarTile(
+                    label: printer.name,
+                    icon: Icons.print_outlined,
+                    selected: _selectedPrinterId == printer.id,
+                    onTap: () =>
+                        setState(() => _selectedPrinterId = printer.id),
+                    trailing: _sidebarBadgeFor(printer),
+                  ),
+              ],
+            ),
+            MacSidebarSection(
+              title: 'Library',
+              children: <Widget>[
+                MacSidebarTile(
+                  label: 'Maintenance Tasks',
+                  icon: Icons.library_books_outlined,
+                  onTap: _openLibrary,
+                ),
+              ],
+            ),
+          ],
+        ),
+        Expanded(child: _buildMacContent()),
+      ],
+    );
+  }
+
+  Widget _buildMacContent() {
+    final id = _selectedPrinterId;
+    if (id == null) return _buildBody();
+    return PrinterDetailScreen(
+      key: ValueKey<int>(id),
+      printerId: id,
+      embedded: true,
+      onDeleted: () {
+        setState(() => _selectedPrinterId = null);
+        _load();
+      },
+      onChanged: _load,
+    );
+  }
+
+  /// The little overdue / due-soon count beside a printer's sidebar row.
+  Widget? _sidebarBadgeFor(Printer printer) {
+    final status = _statuses[printer.id!];
+    if (status == null) return null;
+    if (status.overdue > 0) return MacSidebarBadge(count: status.overdue);
+    if (status.dueSoon > 0) {
+      return MacSidebarBadge(count: status.dueSoon, color: MacColors.orange);
+    }
+    return null;
   }
 
   /// The real macOS menu bar, so the File, View and Printer commands land where
@@ -506,19 +595,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 24),
-          SectionHeader(
-            title: 'My printers',
-            trailing: '${_printersList.length}',
-          ),
-          if (_showBoard)
+          if (_showBoard) ...<Widget>[
+            const SizedBox(height: 24),
+            SectionHeader(
+              title: 'Year board',
+              trailing: '${_printersList.length}',
+            ),
             _BoardView(
               printers: _printersList,
               schedules: _schedules,
               onLog: (p, t) => _logFor(p, t),
               onOpenPrinter: (p) => _openPrinter(p.id!),
-            )
-          else
+            ),
+          ] else if (!isMacOS) ...<Widget>[
+            // macOS lists printers in the sidebar, so the overview does not
+            // repeat them here.
+            const SizedBox(height: 24),
+            SectionHeader(
+              title: 'My printers',
+              trailing: '${_printersList.length}',
+            ),
             ..._printersList.map(
               (printer) => _PrinterTile(
                 printer: printer,
@@ -527,6 +623,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onEditHours: () => _editHours(printer),
               ),
             ),
+          ],
           if (_recent.isNotEmpty) ...<Widget>[
             const SizedBox(height: 24),
             const SectionHeader(title: 'Recent activity'),
