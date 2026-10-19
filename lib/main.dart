@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'ui/macos_theme.dart';
 import 'ui/screens/dashboard_screen.dart';
 
 void main() {
@@ -16,9 +17,28 @@ class PrinterMaintenanceApp extends StatelessWidget {
       title: 'PrintTender',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.system,
-      theme: _buildTheme(Brightness.light),
-      darkTheme: _buildTheme(Brightness.dark),
+      theme: _themeFor(Brightness.light),
+      darkTheme: _themeFor(Brightness.dark),
+      builder: isMacOS ? _windowChrome : null,
       home: const DashboardScreen(),
+    );
+  }
+
+  /// macOS gets its own AppKit-flavoured theme; Android keeps the Material one.
+  ThemeData _themeFor(Brightness brightness) =>
+      isMacOS ? buildMacTheme(brightness) : _buildTheme(brightness);
+
+  /// The macOS runner gives the window a transparent title bar over a full-size
+  /// content view, so the traffic-light buttons float above the app. This
+  /// reserves the strip they sit in and paints it the toolbar colour, which
+  /// makes the title bar and the toolbar below read as a single surface.
+  Widget _windowChrome(BuildContext context, Widget? child) {
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.surfaceContainer,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 28),
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 

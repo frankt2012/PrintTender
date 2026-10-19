@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/due_status.dart';
+import 'macos_theme.dart';
 
 Color dueColor(BuildContext context, DueLevel level) {
   final scheme = Theme.of(context).colorScheme;
@@ -9,9 +10,9 @@ Color dueColor(BuildContext context, DueLevel level) {
     case DueLevel.overdue:
       return scheme.error;
     case DueLevel.dueSoon:
-      return const Color(0xFFB26A00);
+      return isMacOS ? MacColors.orange : const Color(0xFFB26A00);
     case DueLevel.ok:
-      return const Color(0xFF2E7D32);
+      return isMacOS ? MacColors.green : const Color(0xFF2E7D32);
     case DueLevel.unscheduled:
       return scheme.outline;
   }

@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../data/models.dart';
 import '../../data/repositories.dart';
@@ -8,6 +7,8 @@ import '../../services/backup.dart';
 import '../../services/backup_io.dart';
 import '../../services/due_status.dart';
 import '../../services/notifications.dart';
+import '../mac_controls.dart';
+import '../macos_theme.dart';
 import '../widgets.dart';
 import 'add_log_entry_screen.dart';
 import 'edit_printer_screen.dart';
@@ -40,7 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   List<Printer> _printersList = const <Printer>[];
   Map<int, PrinterStatus> _statuses = const <int, PrinterStatus>{};
-  Map<int, List<PrinterTask>> _schedules = <int, List<PrinterTask>>{};
+  final Map<int, List<PrinterTask>> _schedules = <int, List<PrinterTask>>{};
   List<AttentionItem> _attention = const <AttentionItem>[];
   List<LogEntry> _recent = const <LogEntry>[];
   Map<int, String> _printerNames = const <int, String>{};
@@ -250,30 +251,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(
         title: const Text('Printer Maintenance'),
         actions: <Widget>[
-          if (Platform.isMacOS || Platform.isWindows || Platform.isLinux)
+          if (isDesktop)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: SegmentedButton<bool>(
-                segments: const <ButtonSegment<bool>>[
-                  ButtonSegment<bool>(
+              child: MacSegmentedControl<bool>(
+                segments: const <MacSegment<bool>>[
+                  MacSegment<bool>(
                     value: false,
-                    label: Text('Tasks'),
-                    icon: Icon(Icons.list_alt_outlined),
+                    label: 'Tasks',
+                    icon: Icons.list_alt_outlined,
                   ),
-                  ButtonSegment<bool>(
+                  MacSegment<bool>(
                     value: true,
-                    label: Text('Year board'),
-                    icon: Icon(Icons.calendar_view_month_outlined),
+                    label: 'Year Board',
+                    icon: Icons.calendar_view_month_outlined,
                   ),
                 ],
-                selected: <bool>{_showBoard},
-                onSelectionChanged: (selection) {
-                  setState(() => _showBoard = selection.first);
-                },
+                value: _showBoard,
+                onChanged: (selection) =>
+                    setState(() => _showBoard = selection),
               ),
             ),
           IconButton(
@@ -306,15 +306,136 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
+          if (isMacOS) ...<Widget>[
+            const SizedBox(width: 4),
+            OutlinedButton.icon(
+              onPressed: _addPrinter,
+              icon: const Icon(Icons.add, size: 14),
+              label: const Text('Add Printer'),
+            ),
+            const SizedBox(width: 14),
+          ],
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _addPrinter,
-        icon: const Icon(Icons.add),
-        label: const Text('Add printer'),
-      ),
+      // macOS puts primary actions in the toolbar, never in a floating button.
+      floatingActionButton: isMacOS
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: _addPrinter,
+              icon: const Icon(Icons.add),
+              label: const Text('Add printer'),
+            ),
       body: _buildBody(),
     );
+
+    if (!isMacOS) return scaffold;
+    return PlatformMenuBar(menus: _macMenus(), child: scaffold);
+  }
+
+  /// The real macOS menu bar, so the File, View and Printer commands land where
+  /// Mac users reach for them instead of behind an overflow button.
+  List<PlatformMenuItem> _macMenus() {
+    return <PlatformMenuItem>[
+      PlatformMenu(
+        label: 'PrintTender',
+        menus: <PlatformMenuItem>[
+          const PlatformProvidedMenuItem(
+            type: PlatformProvidedMenuItemType.about,
+          ),
+          const PlatformMenuItemGroup(
+            members: <PlatformMenuItem>[
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.hide,
+              ),
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.hideOtherApplications,
+              ),
+              PlatformProvidedMenuItem(
+                type: PlatformProvidedMenuItemType.showAllApplications,
+              ),
+            ],
+          ),
+          const PlatformProvidedMenuItem(
+            type: PlatformProvidedMenuItemType.quit,
+          ),
+        ],
+      ),
+      PlatformMenu(
+        label: 'File',
+        menus: <PlatformMenuItem>[
+          PlatformMenuItem(
+            label: 'Export Backup…',
+            shortcut:
+                const SingleActivator(LogicalKeyboardKey.keyE, meta: true),
+            onSelected: _exportBackup,
+          ),
+          PlatformMenuItem(
+            label: 'Import Backup…',
+            shortcut: const SingleActivator(
+              LogicalKeyboardKey.keyI,
+              meta: true,
+            ),
+            onSelected: _importBackup,
+          ),
+        ],
+      ),
+      PlatformMenu(
+        label: 'Printer',
+        menus: <PlatformMenuItem>[
+          PlatformMenuItem(
+            label: 'Add Printer…',
+            shortcut: const SingleActivator(
+              LogicalKeyboardKey.keyN,
+              meta: true,
+            ),
+            onSelected: _addPrinter,
+          ),
+          PlatformMenuItem(
+            label: 'Maintenance Library…',
+            shortcut: const SingleActivator(
+              LogicalKeyboardKey.keyL,
+              meta: true,
+            ),
+            onSelected: _openLibrary,
+          ),
+        ],
+      ),
+      PlatformMenu(
+        label: 'View',
+        menus: <PlatformMenuItem>[
+          PlatformMenuItem(
+            label: 'Tasks',
+            shortcut: const SingleActivator(
+              LogicalKeyboardKey.digit1,
+              meta: true,
+            ),
+            onSelected: () => setState(() => _showBoard = false),
+          ),
+          PlatformMenuItem(
+            label: 'Year Board',
+            shortcut: const SingleActivator(
+              LogicalKeyboardKey.digit2,
+              meta: true,
+            ),
+            onSelected: () => setState(() => _showBoard = true),
+          ),
+        ],
+      ),
+      PlatformMenu(
+        label: 'Window',
+        menus: const <PlatformMenuItem>[
+          PlatformProvidedMenuItem(
+            type: PlatformProvidedMenuItemType.minimizeWindow,
+          ),
+          PlatformProvidedMenuItem(
+            type: PlatformProvidedMenuItemType.zoomWindow,
+          ),
+          PlatformProvidedMenuItem(
+            type: PlatformProvidedMenuItemType.toggleFullScreen,
+          ),
+        ],
+      ),
+    ];
   }
 
   Widget _buildBody() {
