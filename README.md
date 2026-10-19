@@ -130,20 +130,47 @@ is pinned explicitly on this machine so an upgrade cannot silently drop it:
 flutter config --no-enable-macos-arm64-only
 ```
 
-Transferring the app to a second Mac trips Gatekeeper. It is signed ad-hoc with
-no Developer ID — `security find-identity -v -p codesigning` reports none — so
-AirDrop, Mail or a browser download stamps on `com.apple.quarantine` and macOS
-refuses to open it. Locally built it carries no quarantine and opens normally.
-To run it elsewhere:
+Transferring the app to a second Mac trips Gatekeeper. There is no Developer ID
+identity here — the only codesigning identity on this machine is a self-signed
+certificate named `PrintTender Local Signer` — so AirDrop, Mail or a browser
+download stamps on `com.apple.quarantine` and macOS refuses to open it. Locally
+built it carries no quarantine and opens normally. To run it elsewhere:
 
 ```bash
 # simplest: right-click the app in Finder and choose Open, once
 xattr -dr com.apple.quarantine /Applications/PrintTender.app   # or strip it wholesale
 ```
 
-Opening it properly would mean an Apple Developer membership for Developer ID
-signing plus notarization; without one, the above is the expected state of a
-personal app.
+#### Why the built app is re-signed
+
+`flutter build macos --release` signs the bundle ad-hoc, and an ad-hoc signature
+is regenerated on every build. macOS keys code-identity state to the signature —
+the notification permission, and access to protected files inside the sandbox
+container — so a rebuild would leave the app looking like a different app, back
+at a fresh notification prompt. Builds here are therefore re-signed with the
+self-signed identity, which does not change between builds: nested frameworks
+first, then the app with its Release entitlements, and no injected
+`get-task-allow`:
+
+```bash
+id="PrintTender Local Signer"
+app=/Applications/PrintTender.app
+
+for fw in "$app"/Contents/Frameworks/*.framework; do
+  codesign --force --timestamp=none --sign "$id" "$fw"
+done
+
+codesign --force --timestamp=none --sign "$id" \
+  --entitlements macos/Runner/Release.entitlements "$app"
+
+codesign --verify --deep --strict "$app"   # -> valid on disk
+```
+
+To do the same on another Mac, create a self-signed certificate of type **Code
+Signing** in Keychain Access → Certificate Assistant, then use its name. It only
+grants a stable local identity; it is trusted nowhere else. Without an Apple
+Developer membership there is no Developer ID signing and no notarization, which
+is the expected state of a personal app.
 
 ## Tests
 
