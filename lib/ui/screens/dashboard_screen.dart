@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../data/models.dart';
@@ -38,6 +40,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   List<Printer> _printersList = const <Printer>[];
   Map<int, PrinterStatus> _statuses = const <int, PrinterStatus>{};
+  Map<int, List<PrinterTask>> _schedules = const <int, List<PrinterTask>>{};
   List<AttentionItem> _attention = const <AttentionItem>[];
   List<LogEntry> _recent = const <LogEntry>[];
   Map<int, String> _printerNames = const <int, String>{};
@@ -45,6 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _totalCost = 0;
   bool _loading = true;
   Object? _error;
+  bool _showBoard = false;
 
   @override
   void initState() {
@@ -79,6 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }
         }
         overdueCount += overdue;
+        _schedules[printer.id!] = schedules;
         statuses[printer.id!] = PrinterStatus(
           overdue: overdue,
           dueSoon: dueSoon,
@@ -249,6 +254,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text('Printer Maintenance'),
         actions: <Widget>[
+          if (Platform.isMacOS || Platform.isWindows || Platform.isLinux)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: SegmentedButton<bool>(
+                segments: const <ButtonSegment<bool>>[
+                  ButtonSegment<bool>(
+                    value: false,
+                    label: Text('Tasks'),
+                    icon: Icon(Icons.list_alt_outlined),
+                  ),
+                  ButtonSegment<bool>(
+                    value: true,
+                    label: Text('Year board'),
+                    icon: Icon(Icons.calendar_view_month_outlined),
+                  ),
+                ],
+                selected: <bool>{_showBoard},
+                onSelectionChanged: (selection) {
+                  setState(() => _showBoard = selection.first);
+                },
+              ),
+            ),
           IconButton(
             tooltip: 'Maintenance library',
             icon: const Icon(Icons.library_books_outlined),
@@ -363,14 +390,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             title: 'My printers',
             trailing: '${_printersList.length}',
           ),
-          ..._printersList.map(
-            (printer) => _PrinterTile(
-              printer: printer,
-              status: _statuses[printer.id!],
-              onTap: () => _openPrinter(printer.id!),
-              onEditHours: () => _editHours(printer),
+          if (_showBoard)
+            _BoardView(
+              printers: _printersList,
+              schedules: _schedules,
+              onLog: (p, t) => _logFor(p, t),
+              onOpenPrinter: (p) => _openPrinter(p.id!),
+            )
+          else
+            ..._printersList.map(
+              (printer) => _PrinterTile(
+                printer: printer,
+                status: _statuses[printer.id!],
+                onTap: () => _openPrinter(printer.id!),
+                onEditHours: () => _editHours(printer),
+              ),
             ),
-          ),
           if (_recent.isNotEmpty) ...<Widget>[
             const SizedBox(height: 24),
             const SectionHeader(title: 'Recent activity'),
@@ -532,5 +567,218 @@ class _RecentTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+
+class _BoardView extends StatelessWidget {
+  const _BoardView({
+    required this.printers,
+    required this.schedules,
+    required this.onLog,
+    required this.onOpenPrinter,
+  });
+
+  final List<Printer> printers;
+  final Map<int, List<PrinterTask>> schedules;
+  final void Function(Printer, PrinterTask) onLog;
+  final void Function(Printer) onOpenPrinter;
+
+  static const List<String> _months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+    final cm = now.month - 1;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: <Widget>[
+                  const SizedBox(width: 110),
+                  Expanded(
+                    child: Row(
+                      children: List<Widget>.generate(_months.length, (i) {
+                        final isNow = i == cm;
+                        return Expanded(
+                          child: Center(
+                            child: Text(
+                              _months[i],
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: isNow
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant,
+                                fontWeight: isNow ? FontWeight.w600 : null,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 140),
+                ],
+              ),
+            ),
+            const Divider(height: 16),
+            ...printers.expand((p) => _buildPrinterRows(context, p, cm, theme)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildPrinterRows(
+    BuildContext context,
+    Printer p,
+    int cm,
+    ThemeData theme,
+  ) {
+    final rows = <Widget>[];
+    final printerSchedules = schedules[p.id!] ?? const <PrinterTask>[];
+    final tasks = [...printerSchedules]..sort((a, b) => a.taskName.compareTo(b.taskName));
+    for (final t in tasks) {
+      final s = DueStatus.evaluate(printer: p, schedule: t);
+      int col = -1;
+      String note = s.label;
+      if (t.intervalHours != null && t.lastDoneHours != null) {
+        final hInterval = t.intervalHours!;
+        final hLast = t.lastDoneHours!;
+        if (s.level != DueLevel.ok && s.level != DueLevel.unscheduled) {
+          col = cm;
+        }
+        final remaining = hInterval - (p.totalPrintHours - hLast);
+        if (remaining > 0) {
+          note = '${_fmtHours(remaining)} h left';
+        } else if (remaining < 0) {
+          note = '${_fmtHours(-remaining)} h over';
+        } else {
+          note = 'Due now';
+        }
+      } else if (t.lastDoneAt != null) {
+        final last = t.lastDoneAt!;
+        DateTime due;
+        final im = t.intervalMonths;
+        if (im != null && im > 0) {
+          due = DueStatus.addMonths(last, im);
+        } else {
+          final id = t.intervalDays ?? 0;
+          due = DateTime.utc(last.year, last.month, last.day)
+              .add(Duration(days: id));
+        }
+        col = due.month - 1;
+        if (s.level == DueLevel.overdue) {
+          note = 'Overdue · ${_fmtDate(due)}';
+        } else if (s.level == DueLevel.dueSoon) {
+          note = 'Due soon · ${_fmtDate(due)}';
+        } else {
+          note = 'Due ${_fmtDate(due)}';
+        }
+      }
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            children: <Widget>[
+              SizedBox(
+                width: 110,
+                child: Text(
+                  t.taskName,
+                  style: theme.textTheme.bodyMedium,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Expanded(
+                child: Row(
+                  children: List<Widget>.generate(_months.length, (i) {
+                    final isNow = i == cm;
+                    final isMark = i == col;
+                    Color? bg;
+                    if (isMark) {
+                      bg = s.level == DueLevel.overdue
+                          ? theme.colorScheme.errorContainer
+                          : s.level == DueLevel.dueSoon
+                              ? theme.colorScheme.tertiaryContainer
+                              : theme.colorScheme.primaryContainer;
+                    }
+                    return Expanded(
+                      child: Container(
+                        height: 20,
+                        margin: const EdgeInsets.symmetric(horizontal: 1),
+                        decoration: BoxDecoration(
+                          color: bg,
+                          borderRadius: BorderRadius.circular(4),
+                          border: isNow
+                              ? Border.all(color: theme.colorScheme.primary, width: 1.5)
+                              : null,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+              SizedBox(
+                width: 140,
+                child: Text(
+                  note,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.right,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      rows.add(const Divider(height: 1));
+    }
+    if (tasks.isNotEmpty) {
+      rows.insert(
+        0,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Text(
+            p.name,
+            style: theme.textTheme.labelLarge,
+          ),
+        ),
+      );
+    }
+    return rows;
+  }
+
+  String _fmtDate(DateTime d) {
+    final y = d.year.toString();
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '$y-$m-$day';
+  }
+
+  String _fmtHours(double h) {
+    if (h.abs() < 0.05) return '0.0';
+    return h.toStringAsFixed(1);
   }
 }
