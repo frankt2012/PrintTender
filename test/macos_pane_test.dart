@@ -220,6 +220,22 @@ void main() {
       expect(find.text('V2-0123'), findsOneWidget);
       expect(find.text('Enclosed, ABS only.'), findsOneWidget);
 
+      expect(find.text('Nozzle: '), findsOneWidget);
+      expect(find.text('0.4 mm CHT brass'), findsOneWidget);
+      expect(find.text('Textured G10'), findsOneWidget);
+      expect(find.text('Enclosed, ABS only.'), findsOneWidget);
+
+      // Serial and purchase date share one chip, on one line, with the
+      // separator the chip draws between its parts.
+      expect(find.text('S/N: '), findsOneWidget);
+      expect(find.text('V2-0123'), findsOneWidget);
+      expect(find.text('Bought: '), findsOneWidget);
+      expect(find.text('  ·  '), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Bought: ')).dy,
+        tester.getTopLeft(find.text('S/N: ')).dy,
+      );
+
       // The pushed screen's stacked header card is gone from the pane.
       expect(find.text('Print hours  ·  tap to edit'), findsNothing);
     });

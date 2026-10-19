@@ -597,26 +597,30 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
                 if (printer.nozzleLabel.isNotEmpty)
                   _SetupChip(
                     icon: Icons.print_outlined,
-                    label: 'Nozzle',
-                    value: printer.nozzleLabel,
+                    parts: [(label: 'Nozzle', value: printer.nozzleLabel)],
                   ),
                 if (printer.buildPlate != null)
                   _SetupChip(
                     icon: Icons.layers_outlined,
-                    label: 'Plate',
-                    value: printer.buildPlate!,
+                    parts: [(label: 'Plate', value: printer.buildPlate!)],
                   ),
-                if (printer.serialNumber != null)
+                // Serial and purchase date share a chip: the same lines of text,
+                // but one gap and one lot of padding instead of two.
+                if (printer.serialNumber != null ||
+                    printer.purchaseDate != null)
                   _SetupChip(
-                    icon: Icons.tag,
-                    label: 'S/N',
-                    value: printer.serialNumber!,
-                  ),
-                if (printer.purchaseDate != null)
-                  _SetupChip(
-                    icon: Icons.shopping_bag_outlined,
-                    label: 'Bought',
-                    value: formatDate(printer.purchaseDate!),
+                    icon: printer.serialNumber != null
+                        ? Icons.tag
+                        : Icons.shopping_bag_outlined,
+                    parts: [
+                      if (printer.serialNumber != null)
+                        (label: 'S/N', value: printer.serialNumber!),
+                      if (printer.purchaseDate != null)
+                        (
+                          label: 'Bought',
+                          value: formatDate(printer.purchaseDate!),
+                        ),
+                    ],
                   ),
               ],
             ),
@@ -835,14 +839,12 @@ class _HeaderCard extends StatelessWidget {
                 if (printer.nozzleLabel.isNotEmpty)
                   _SetupChip(
                     icon: Icons.local_fire_department_outlined,
-                    label: 'Nozzle',
-                    value: printer.nozzleLabel,
+                    parts: [(label: 'Nozzle', value: printer.nozzleLabel)],
                   ),
                 if (printer.buildPlate != null)
                   _SetupChip(
                     icon: Icons.layers_outlined,
-                    label: 'Build plate',
-                    value: printer.buildPlate!,
+                    parts: [(label: 'Build plate', value: printer.buildPlate!)],
                   ),
               ],
             ),
@@ -853,44 +855,44 @@ class _HeaderCard extends StatelessWidget {
   }
 }
 
-/// A small read-only "Nozzle · 0.4 mm brass" style chip for the header.
+/// A small read-only chip for the header — "Nozzle: 0.4 mm brass".
+///
+/// Takes a list of pairs so that details belonging together share one chip:
+/// "S/N: V2-0123 · Bought: Mar 14, 2024". One chip is one gap and one row of
+/// padding, which is what keeps the strip from wrapping.
 class _SetupChip extends StatelessWidget {
-  const _SetupChip({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  const _SetupChip({required this.icon, required this.parts});
 
   final IconData icon;
-  final String label;
-  final String value;
+  final List<({String label, String value})> parts;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    final emphasised = theme.textTheme.bodySmall?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 15, color: theme.colorScheme.onSurfaceVariant),
+          Icon(icon, size: 15, color: scheme.onSurfaceVariant),
           const SizedBox(width: 6),
-          Text(
-            '$label: ',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          Text(
-            value,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          for (final (index, part) in parts.indexed) ...<Widget>[
+            if (index > 0) Text('  ·  ', style: muted),
+            Text('${part.label}: ', style: muted),
+            Text(part.value, style: emphasised),
+          ],
         ],
       ),
     );
