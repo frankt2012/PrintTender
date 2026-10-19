@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.47.7
+  JAVA_VERSION: "21"
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Read the version from pubspec.yaml
+        id: version
+        run: |
+          version=$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building PrintTender $version"
+
+      - name: Analyse
+        run: flutter analyze
+
+      - name: Restore the release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64}" ] || [ -z "${STORE_PASSWORD}" ] || [ -z "${KEY_ALIAS}" ]; then
+            echo "::error::Android signing secrets are missing; refusing to publish an unsigned build."
+            exit 1
+          fi
+          keystore="$RUNNER_TEMP/printtender-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$keystore"
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
+            "$STORE_PASSWORD" "${KEY_PASSWORD:-$STORE_PASSWORD}" "$KEY_ALIAS" "$keystore" \
+            > android/key.properties
+
+      - name: Build the APK
+        run: flutter build apk --release
+
+      - name: Confirm it carries the release key and not the debug key
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)
+          "$apksigner" verify --print-certs build/app/outputs/flutter-apk/app-release.apk | tee certs.txt
+          if grep -q "CN=Android Debug" certs.txt; then
+            echo "::error::the APK was signed with the debug key"
+            exit 1
+          fi
+
+      - name: Name the APK after the version
+        run: cp build/app/outputs/flutter-apk/app-release.apk "PrintTender-${{ steps.version.outputs.version }}.apk"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: apk
+          path: PrintTender-*.apk
+          if-no-files-found: error
+
+  macos:
+    name: macOS DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Read the version from pubspec.yaml
+        id: version
+        run: |
+          version=$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build the app
+        run: |
+          flutter config --no-enable-macos-arm64-only
+          flutter build macos --release
+
+      - name: Package it as a DMG
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/stage"
+          mkdir -p "$stage"
+          ditto build/macos/Build/Products/Release/PrintTender.app "$stage/PrintTender.app"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname PrintTender -srcfolder "$stage" -ov -format UDZO \
+            "PrintTender-${{ steps.version.outputs.version }}.dmg"
+          echo "architectures: $(lipo -archs "$stage/PrintTender.app/Contents/MacOS/PrintTender")"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dmg
+          path: PrintTender-*.dmg
+          if-no-files-found: error
+
+  release:
+    name: Publish
+    needs: [android, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+
+      - name: Attach the installers to a GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ls -l PrintTender-*
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" PrintTender-*.apk PrintTender-*.dmg --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "PrintTender ${GITHUB_REF_NAME#v}" \
+              --generate-notes \
+              PrintTender-*.apk PrintTender-*.dmg
+          fi
