@@ -592,6 +592,13 @@ Build plate on Prusa MK4 is due soon
 - Import print sessions from slicer history to advance the odometer automatically.
 - Cloud sync (Supabase or similar).
 
+## How this was built
+
+Most of the code, tests and documentation here was written by an AI coding
+assistant at **frankt2012**'s direction, with human decisions on design and scope,
+and human verification of the test suite, release builds and shipped installers.
+There has been no independent code review or security audit. Treat it accordingly.
+
 ## Licence
 
 [MIT](LICENSE) © 2026 Frank Triolo.
