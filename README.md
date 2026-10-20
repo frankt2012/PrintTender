@@ -598,6 +598,8 @@ Most of the code, tests and documentation here was written by an AI coding
 assistant at **frankt2012**'s direction, with human decisions on design and scope,
 and human verification of the test suite, release builds and shipped installers.
 There has been no independent code review or security audit. Treat it accordingly.
+Commits written with that assistance carry an `Assisted-by:` trailer in the
+message, so `git log` shows it too.
 
 ## Licence
 
