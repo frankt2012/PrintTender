@@ -7,6 +7,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:printer_maintenance/data/database.dart';
 import 'package:printer_maintenance/main.dart';
+import 'package:printer_maintenance/services/notifications.dart';
 import 'package:printer_maintenance/ui/screens/add_log_entry_screen.dart';
 import 'package:printer_maintenance/ui/screens/edit_printer_screen.dart';
 import 'package:printer_maintenance/ui/screens/printer_detail_screen.dart';
@@ -403,7 +404,9 @@ void main() {
     expect(find.text('Import backup'), findsOneWidget);
     await settle(tester);
 
-    await tester.tap(find.byType(PopupMenuItem<String>).first);
+    // The export item is targeted by name, not position: the menu also holds
+    // Settings and future entries.
+    await tester.tap(find.text('Export backup'));
 
     // The export serialises the database and writes it to a real file, so it
     // finishes on the platform event loop rather than the fake test clock.
@@ -444,6 +447,43 @@ void main() {
       files.single.uri.pathSegments.last,
       matches(RegExp(r'^printer-maintenance-\d{4}-\d{2}-\d{2}\.json$')),
     );
+  });
+
+  testWidgets('the settings screen shows and keeps the digest time',
+      (tester) async {
+    configurePhone(tester);
+    await tester.pumpWidget(const PrinterMaintenanceApp());
+    await pumpUntil(tester, find.text('No printers yet'));
+
+    await tapWhenReady(tester, find.byTooltip('More'));
+    await tapWhenReady(tester, find.text('Settings'));
+    await pumpUntil(tester, find.text('Morning digest'));
+
+    // Unset means 09:00, which the phone layout spells out in 12-hour form.
+    expect(find.text('9:00 AM'), findsOneWidget);
+
+    // Stored the way the picker stores it. Real file IO only lands while the
+    // binding is running the real event loop, hence runAsync.
+    await tester.runAsync(
+      () => ReminderService.writeDigestMinutes(8 * 60 + 30),
+    );
+    await tester.pageBack();
+    await settle(tester);
+
+    await tapWhenReady(tester, find.byTooltip('More'));
+    await tapWhenReady(tester, find.text('Settings'));
+    await pumpUntil(tester, find.text('Morning digest'));
+
+    // The pane paints the default first and swaps in the stored value when the
+    // read returns, so wait for the swap rather than the first frame.
+    for (var attempt = 0; attempt < 50; attempt++) {
+      if (find.text('8:30 AM').evaluate().isNotEmpty) break;
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+    }
+    expect(find.text('8:30 AM'), findsOneWidget);
   });
 
   testWidgets('a calendar-only task hides the print-hours field and still resets',

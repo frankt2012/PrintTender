@@ -16,6 +16,7 @@ import '../widgets.dart';
 import 'add_log_entry_screen.dart';
 import 'edit_printer_screen.dart';
 import 'printer_detail_screen.dart';
+import 'settings_screen.dart';
 import 'task_definitions_screen.dart';
 
 class PrinterStatus {
@@ -159,6 +160,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await Navigator.of(context).push(
       pushPage((_) => const TaskDefinitionsScreen(), name: 'library'),
     );
+    await _load();
+  }
+
+  /// Device settings, which today means the time of the daily digest.
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push(
+      pushPage(
+        (_) => const SettingsScreen(),
+        maxWidth: 520,
+        maxHeight: 300,
+        name: 'settings',
+      ),
+    );
+    // The dashboard load reschedules the digest, so a changed time takes
+    // effect as soon as the sheet closes.
     await _load();
   }
 
@@ -312,6 +328,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           PopupMenuButton<String>(
             tooltip: 'More',
             onSelected: (value) {
+              if (value == 'settings') _openSettings();
               if (value == 'export') _exportBackup();
               if (value == 'import') _importBackup();
             },
@@ -329,6 +346,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: ListTile(
                   leading: Icon(Icons.restore_outlined),
                   title: Text('Import backup'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'settings',
+                child: ListTile(
+                  leading: Icon(Icons.settings_outlined),
+                  title: Text('Settings'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -446,6 +471,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         menus: <PlatformMenuItem>[
           const PlatformProvidedMenuItem(
             type: PlatformProvidedMenuItemType.about,
+          ),
+          PlatformMenuItem(
+            label: 'Settings…',
+            shortcut: const SingleActivator(
+              LogicalKeyboardKey.comma,
+              meta: true,
+            ),
+            onSelected: _openSettings,
           ),
           const PlatformMenuItemGroup(
             members: <PlatformMenuItem>[

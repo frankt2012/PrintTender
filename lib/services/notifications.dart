@@ -33,10 +33,11 @@ class ReminderDigest {
 /// The app cannot see a print-hour interval coming: the odometer only moves
 /// when the user records a reading, so a "every 200 h" task has no date to
 /// alarm on. Rather than only covering the calendar intervals, there is a
-/// single **morning digest** — one notification, delivered daily at
-/// [digestHour] local time, listing everything the schedules currently say is
-/// overdue or due soon. That covers hour tasks, day tasks and month tasks
-/// alike, and it needs no per-task ids to maintain when schedules change.
+/// single **morning digest** — one notification, delivered daily at the time
+/// chosen in Settings (09:00 local time until it is changed), listing
+/// everything the schedules currently say is overdue or due soon. That covers
+/// hour tasks, day tasks and month tasks alike, and it needs no per-task ids
+/// to maintain when schedules change.
 ///
 /// Two deliberate rules keep it from nagging:
 ///
@@ -59,8 +60,9 @@ class ReminderService {
   /// Notification id of the morning digest (also the reminder's only one).
   static const int digestId = 4242;
 
-  /// When the digest is delivered, in local time.
-  static const int digestHour = 9;
+  /// The delivery time used until one is chosen, as minutes past midnight:
+  /// 09:00 local time.
+  static const int defaultDigestMinutes = 9 * Duration.minutesPerHour;
 
   /// Longest digest body: anything beyond this is summarised as a count so
   /// the notification stays a readable height.
@@ -76,6 +78,11 @@ class ReminderService {
   /// belongs with the rest of this device's state anyway.
   static const String _askedFile = 'reminders_asked';
 
+  /// Where the chosen delivery time lives, in the same device-state folder as
+  /// [_askedFile]. Deliberately not a database row: a backup import replaces
+  /// the workshop, and must not carry another machine's reminder time with it.
+  static const String _digestTimeFile = 'digest_time';
+
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
@@ -85,6 +92,11 @@ class ReminderService {
   /// The digest last written to the scheduler, so an unchanged list does not
   /// get rescheduled on every single dashboard load.
   String? _lastBody;
+
+  /// The delivery time the scheduler was last given. Tracked alongside the
+  /// text so changing the time in Settings reschedules even when the digest
+  /// itself is identical.
+  int? _lastMinutes;
 
   /// `true` once the device reports a zone in the IANA database. When it does
   /// not (a manually pinned fixed-offset zone), `tz.local` stays on UTC and
@@ -115,6 +127,55 @@ class ReminderService {
           : '$count tasks need attention',
       body: lines.join('\n'),
     );
+  }
+
+  /// The chosen delivery time, as minutes past midnight.
+  ///
+  /// Anything unusable — no file yet, an unparseable value, a time outside the
+  /// day — falls back to [defaultDigestMinutes] rather than throwing: a
+  /// reminder setting must never be able to break the dashboard.
+  static Future<int> readDigestMinutes() async {
+    try {
+      final file = File(p.join((await _stateDirectory()).path, _digestTimeFile));
+      if (!await file.exists()) return defaultDigestMinutes;
+      return normaliseDigestMinutes(
+        int.tryParse((await file.readAsString()).trim()),
+      );
+    } catch (error) {
+      debugPrint('Reminders: could not read the digest time ($error)');
+      return defaultDigestMinutes;
+    }
+  }
+
+  /// Stores [minutes] past midnight as this device's delivery time.
+  static Future<void> writeDigestMinutes(int minutes) async {
+    final directory = await _stateDirectory();
+    await directory.create(recursive: true);
+    await File(
+      p.join(directory.path, _digestTimeFile),
+    ).writeAsString('${normaliseDigestMinutes(minutes)}');
+  }
+
+  /// Clamps a stored or picked value into the day, or falls back to
+  /// [defaultDigestMinutes] when there is no usable value at all.
+  static int normaliseDigestMinutes(int? minutes) {
+    if (minutes == null || minutes < 0 || minutes >= Duration.minutesPerDay) {
+      return defaultDigestMinutes;
+    }
+    return minutes;
+  }
+
+  /// The next local civil time at [minutes] past midnight, strictly after
+  /// [now].
+  ///
+  /// Worked out from date components rather than by adding to a timestamp, so
+  /// a daylight-saving change cannot move the wall-clock delivery time.
+  static DateTime nextDigestAfter(DateTime now, int minutes) {
+    final hour = minutes ~/ Duration.minutesPerHour;
+    final minute = minutes % Duration.minutesPerHour;
+    final today = DateTime(now.year, now.month, now.day, hour, minute);
+    if (now.isBefore(today)) return today;
+    return DateTime(now.year, now.month, now.day + 1, hour, minute);
   }
 
   /// Recomputes and reschedules the digest.
@@ -240,31 +301,27 @@ class ReminderService {
   /// this device. Uses the support directory rather than the cache, so
   /// clearing cached files does not bring the prompt back.
   Future<bool> _asked() async {
-    final file = File(p.join((await _flagDirectory()).path, _askedFile));
+    final file = File(p.join((await _stateDirectory()).path, _askedFile));
     return file.exists();
   }
 
   Future<void> _markAsked() async {
-    final directory = await _flagDirectory();
+    final directory = await _stateDirectory();
     await directory.create(recursive: true);
     await File(p.join(directory.path, _askedFile)).writeAsString('asked');
   }
 
-  Future<Directory> _flagDirectory() async {
-    final directory = await getApplicationSupportDirectory();
-    return Directory(p.join(directory.path, 'reminders'));
-  }
-
   Future<void> _apply(List<AttentionItem> attention) async {
     final digest = digestFor(attention);
-    if (digest?.body == _lastBody) return;
+    final minutes = await readDigestMinutes();
+    if (digest?.body == _lastBody && minutes == _lastMinutes) return;
 
     if (digest == null) {
       await _plugin.cancel(id: digestId);
     } else {
       await _plugin.zonedSchedule(
         id: digestId,
-        scheduledDate: _nextDigestAt(digestHour),
+        scheduledDate: _nextDigestAt(minutes),
         title: digest.title,
         body: digest.body,
         payload: 'digest',
@@ -289,21 +346,32 @@ class ReminderService {
     }
 
     _lastBody = digest?.body;
+    _lastMinutes = minutes;
   }
 
-  /// The next [hour]:00 in local time, or tomorrow's if it has passed today.
+  /// The next occurrence of [minutes] past midnight in local time.
   ///
-  /// The date is worked out in local civil time and the hour is always taken
-  /// from [hour], so a daylight-saving jump in the small hours cannot move the
-  /// delivery time with it.
-  tz.TZDateTime _nextDigestAt(int hour) {
-    final now = DateTime.now();
-    var day = DateTime(now.year, now.month, now.day);
-    if (!now.isBefore(DateTime(now.year, now.month, now.day, hour))) {
-      day = day.add(const Duration(days: 1));
-    }
-
-    final wall = tz.TZDateTime(tz.local, day.year, day.month, day.day, hour);
+  /// The date is worked out in local civil time and the time is always taken
+  /// from [minutes], so a daylight-saving jump in the small hours cannot move
+  /// the delivery time with it.
+  tz.TZDateTime _nextDigestAt(int minutes) {
+    final at = nextDigestAfter(DateTime.now(), minutes);
+    final wall = tz.TZDateTime(
+      tz.local,
+      at.year,
+      at.month,
+      at.day,
+      at.hour,
+      at.minute,
+    );
     return _zoneKnown ? wall : wall.subtract(_offset);
   }
+}
+
+/// This device's reminder state: the permission flag and the chosen digest
+/// time. Deliberately beside the app's support files rather than in the
+/// database, which is workshop data and gets replaced wholesale on import.
+Future<Directory> _stateDirectory() async {
+  final directory = await getApplicationSupportDirectory();
+  return Directory(p.join(directory.path, 'reminders'));
 }

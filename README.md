@@ -53,7 +53,7 @@ does not recognise.
 - **Reminders** — every schedule is graded **OK → Due soon (85% consumed) →
   Overdue**, and the dashboard surfaces everything that needs attention across the
   whole workshop, most urgent first. A local notification summarises the same list
-  every morning, and stays silent when nothing is due.
+  at a time you choose (09:00 by default), and stays silent when nothing is due.
 - **Maintenance log** — record what you did, when, at what print-hour reading, what
   parts you used, what it cost, and any notes. Completing a scheduled task resets
   its timer automatically.
@@ -268,7 +268,7 @@ gh release create v1.0.1 --title "PrintTender 1.0.1" PrintTender-1.0.1.dmg \
 
 ```bash
 flutter analyze     # static analysis, currently clean
-flutter test        # 75 tests, all passing
+flutter test        # 86 tests, all passing
 ```
 
 Coverage:
@@ -294,7 +294,9 @@ Coverage:
 - `test/reminder_test.dart` — the morning digest: no notification at all when
   nothing needs attention, how an overdue / due-soon / never-done schedule reads as
   a line of text, the cap that turns a long list into a count, and the equality
-  that lets an unchanged list skip being rescheduled.
+  that lets an unchanged list skip being rescheduled. Also when the next delivery
+  falls — including the moment it comes due, midnight, a month end and a leap
+  day — and how a missing or unreadable stored time falls back to 09:00.
 - `test/macos_ui_test.dart` — the desktop-only shell: the theme is built around the
   system font and accent, `pushPage` lays a page out as a floating sheet rather than
   a full screen, the sheet button bar cancels, saves and refuses both while busy,
@@ -530,8 +532,8 @@ entirely offline.
 An hour-based task has no date to alarm on: the odometer only moves when a
 reading is logged, so "every 200 h" cannot be predicted ahead of time. Rather
 than only covering the calendar intervals, the app sends one **morning digest**
-at **09:00 local time**, listing everything the schedules currently say is
-overdue or due soon:
+at a time you pick — **09:00 local time** until you change it in Settings —
+listing everything the schedules currently say is overdue or due soon:
 
 ```
 2 tasks need attention
@@ -542,6 +544,10 @@ Build plate on Prusa MK4 is due soon
 - **Only when there is something to report.** If the workshop is healthy, the
   scheduled notification is cancelled, so there is nothing to swipe away and no
   daily nag.
+- **The time is yours.** Settings — ⌘, on macOS, or the ⋯ menu on Android — picks
+  the delivery time. It is kept in the device's own state rather than in the
+  database, because importing a backup replaces the workshop and must not carry
+  another machine's reminder time with it.
 - **Refreshed on every dashboard load** — at launch, after every edit and on
   pull-to-refresh — because the text has to be written into the alarm when it is
   scheduled. The worst case is a digest that is one app session behind.
