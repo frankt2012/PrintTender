@@ -7,7 +7,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:printer_maintenance/data/database.dart';
 import 'package:printer_maintenance/main.dart';
-import 'package:printer_maintenance/services/notifications.dart';
+import 'package:printer_maintenance/services/device_settings.dart';
 import 'package:printer_maintenance/ui/screens/add_log_entry_screen.dart';
 import 'package:printer_maintenance/ui/screens/edit_printer_screen.dart';
 import 'package:printer_maintenance/ui/screens/printer_detail_screen.dart';
@@ -107,12 +107,21 @@ void main() {
     addTearDown(tester.view.reset);
   }
 
+  /// A 1280x800 dp window: over the 600 dp breakpoint, so the tablet shell is
+  /// the automatic choice.
+  void configureTablet(WidgetTester tester) {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+  }
+
   /// Fills in and submits the printer form. `seedEssentials` mirrors the
   /// \"Start with the eight essentials\" checkbox, which is on by default.
   Future<void> addPrinter(
     WidgetTester tester,
     String name, {
     bool seedEssentials = false,
+    bool tabletShell = false,
   }) async {
     await tapWhenReady(
       tester,
@@ -153,7 +162,11 @@ void main() {
     await tester.tap(save);
 
     await pumpUntilGone(tester, find.byType(EditPrinterScreen));
-    await pumpUntil(tester, find.text('MY PRINTERS'));
+    // The phone overview lists printers under MY PRINTERS; the tablet shell
+    // keeps them in the sidebar, so it has nothing extra to wait for here.
+    if (!tabletShell) {
+      await pumpUntil(tester, find.text('MY PRINTERS'));
+    }
     await settle(tester);
   }
 
@@ -465,7 +478,7 @@ void main() {
     // Stored the way the picker stores it. Real file IO only lands while the
     // binding is running the real event loop, hence runAsync.
     await tester.runAsync(
-      () => ReminderService.writeDigestMinutes(8 * 60 + 30),
+      () => DeviceSettings.writeDigestMinutes(8 * 60 + 30),
     );
     await tester.pageBack();
     await settle(tester);
@@ -484,6 +497,57 @@ void main() {
       );
     }
     expect(find.text('8:30 AM'), findsOneWidget);
+  });
+
+  testWidgets('a wide screen gets the tablet shell, and a printer opens '
+      'beside the list', (tester) async {
+    configureTablet(tester);
+    await tester.pumpWidget(const PrinterMaintenanceApp());
+    await pumpUntil(tester, find.text('No printers yet'));
+
+    // Automatic layout, and 800 dp on the short side is over the breakpoint.
+    expect(find.text('All printers'), findsOneWidget);
+
+    await addPrinter(tester, 'Voron 2.4', tabletShell: true);
+    await pumpUntil(tester, find.text('Voron 2.4'));
+
+    await tester.tap(find.text('Voron 2.4').first);
+    await pumpUntil(tester, find.byType(PrinterDetailScreen));
+    await settle(tester);
+
+    // Opened in the content well, not pushed over it.
+    final detail = tester.widget<PrinterDetailScreen>(
+      find.byType(PrinterDetailScreen),
+    );
+    expect(detail.embedded, isTrue);
+    expect(find.byType(BackButton), findsNothing);
+    expect(find.text('All printers'), findsOneWidget);
+  });
+
+  testWidgets('the layout preference can force the phone shell on a wide '
+      'screen', (tester) async {
+    configureTablet(tester);
+    // Real file IO only lands while the binding runs the real event loop.
+    await tester.runAsync(
+      () => DeviceSettings.writeTabletLayout(TabletLayoutMode.never),
+    );
+
+    await tester.pumpWidget(const PrinterMaintenanceApp());
+
+    // The preference arrives after the first frame, so wait for the sidebar to
+    // disappear rather than asserting on the first paint.
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
+    while (DateTime.now().isBefore(deadline) &&
+        find.text('All printers').evaluate().isNotEmpty) {
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 5)),
+      );
+    }
+
+    expect(find.text('All printers'), findsNothing);
+    expect(find.text('No printers yet'), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
   });
 
   testWidgets('a calendar-only task hides the print-hours field and still resets',

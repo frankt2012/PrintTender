@@ -1,13 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
+import 'device_settings.dart';
 import 'due_status.dart';
 
 /// The text of a reminder: a headline and one line per thing that needs work.
@@ -60,10 +57,6 @@ class ReminderService {
   /// Notification id of the morning digest (also the reminder's only one).
   static const int digestId = 4242;
 
-  /// The delivery time used until one is chosen, as minutes past midnight:
-  /// 09:00 local time.
-  static const int defaultDigestMinutes = 9 * Duration.minutesPerHour;
-
   /// Longest digest body: anything beyond this is summarised as a count so
   /// the notification stays a readable height.
   static const int maxLines = 5;
@@ -72,16 +65,6 @@ class ReminderService {
   static const String _channelName = 'Maintenance reminders';
   static const String _channelDescription =
       'A morning summary of maintenance tasks that are overdue or coming due.';
-
-  /// A single file whose existence means "the permission prompt has been
-  /// shown". One boolean does not justify a preferences plugin — and the flag
-  /// belongs with the rest of this device's state anyway.
-  static const String _askedFile = 'reminders_asked';
-
-  /// Where the chosen delivery time lives, in the same device-state folder as
-  /// [_askedFile]. Deliberately not a database row: a backup import replaces
-  /// the workshop, and must not carry another machine's reminder time with it.
-  static const String _digestTimeFile = 'digest_time';
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -127,42 +110,6 @@ class ReminderService {
           : '$count tasks need attention',
       body: lines.join('\n'),
     );
-  }
-
-  /// The chosen delivery time, as minutes past midnight.
-  ///
-  /// Anything unusable — no file yet, an unparseable value, a time outside the
-  /// day — falls back to [defaultDigestMinutes] rather than throwing: a
-  /// reminder setting must never be able to break the dashboard.
-  static Future<int> readDigestMinutes() async {
-    try {
-      final file = File(p.join((await _stateDirectory()).path, _digestTimeFile));
-      if (!await file.exists()) return defaultDigestMinutes;
-      return normaliseDigestMinutes(
-        int.tryParse((await file.readAsString()).trim()),
-      );
-    } catch (error) {
-      debugPrint('Reminders: could not read the digest time ($error)');
-      return defaultDigestMinutes;
-    }
-  }
-
-  /// Stores [minutes] past midnight as this device's delivery time.
-  static Future<void> writeDigestMinutes(int minutes) async {
-    final directory = await _stateDirectory();
-    await directory.create(recursive: true);
-    await File(
-      p.join(directory.path, _digestTimeFile),
-    ).writeAsString('${normaliseDigestMinutes(minutes)}');
-  }
-
-  /// Clamps a stored or picked value into the day, or falls back to
-  /// [defaultDigestMinutes] when there is no usable value at all.
-  static int normaliseDigestMinutes(int? minutes) {
-    if (minutes == null || minutes < 0 || minutes >= Duration.minutesPerDay) {
-      return defaultDigestMinutes;
-    }
-    return minutes;
   }
 
   /// The next local civil time at [minutes] past midnight, strictly after
@@ -261,12 +208,12 @@ class ReminderService {
   /// re-nagged — the system setting remains the way back in.
   Future<void> _askPermissionOnce(bool hasSchedule) async {
     if (!hasSchedule) return;
-    if (await _asked()) return;
+    if (await DeviceSettings.remindersAsked()) return;
 
     // Marked before asking, not after: a prompt that throws must not turn
     // into a prompt that comes back on every launch.
     try {
-      await _markAsked();
+      await DeviceSettings.markRemindersAsked();
     } catch (error) {
       // Failing to record the fact is not a reason to skip the prompt.
       debugPrint('Reminders: could not record permission prompt ($error)');
@@ -297,23 +244,9 @@ class ReminderService {
     await ios?.requestPermissions(alert: true, badge: true, sound: true);
   }
 
-  /// Whether the notification permission prompt has already been shown on
-  /// this device. Uses the support directory rather than the cache, so
-  /// clearing cached files does not bring the prompt back.
-  Future<bool> _asked() async {
-    final file = File(p.join((await _stateDirectory()).path, _askedFile));
-    return file.exists();
-  }
-
-  Future<void> _markAsked() async {
-    final directory = await _stateDirectory();
-    await directory.create(recursive: true);
-    await File(p.join(directory.path, _askedFile)).writeAsString('asked');
-  }
-
   Future<void> _apply(List<AttentionItem> attention) async {
     final digest = digestFor(attention);
-    final minutes = await readDigestMinutes();
+    final minutes = await DeviceSettings.readDigestMinutes();
     if (digest?.body == _lastBody && minutes == _lastMinutes) return;
 
     if (digest == null) {
@@ -366,12 +299,4 @@ class ReminderService {
     );
     return _zoneKnown ? wall : wall.subtract(_offset);
   }
-}
-
-/// This device's reminder state: the permission flag and the chosen digest
-/// time. Deliberately beside the app's support files rather than in the
-/// database, which is workshop data and gets replaced wholesale on import.
-Future<Directory> _stateDirectory() async {
-  final directory = await getApplicationSupportDirectory();
-  return Directory(p.join(directory.path, 'reminders'));
 }

@@ -2,17 +2,26 @@
 
 ## Releasing
 
-**Every user-visible change ships as a release.** Never leave a feature or fix
-sitting in `main` with no installer behind it: bump the version, commit, tag and
-push the tag. The tag is what publishes — the release workflow builds the signed
-APK on Linux and the DMG on macOS and attaches both to a GitHub Release.
+**Nothing goes public until the user has tested it.** Do not push, tag or publish
+on your own initiative. The repository is public and the user tests updates on
+their own devices first. The flow is: build locally → hand it over → wait for an
+explicit go-ahead → push, tag, release.
 
-1. Bump `version:` in `pubspec.yaml` (for example `1.0.2+3`). The `+N` build
-   number must increase too, and the tag is the part before the `+`: `v1.0.2`.
-2. Update anything the change made stale in `README.md` — test counts, behaviour
-   descriptions, the notification/signing notes.
-3. Commit, then `git tag v1.0.2` and `git push origin main v1.0.2`.
-4. Watch the run (`gh run watch`) and confirm both assets were attached.
+1. Make the change and bump `version:` in `pubspec.yaml` (for example
+   `1.0.2+3`). The `+N` build number must increase too, and the eventual tag is
+   the part before the `+`: `v1.0.2`.
+2. Update anything the change made stale: `README.md` (test counts, behaviour,
+   notification/signing notes) and `CHANGELOG.md` — move the `Unreleased` entry
+   under `## [1.0.2] - YYYY-MM-DD`. The release workflow takes the release body
+   from that section and fails if it is missing.
+3. Build what the user needs to test, locally, signed with the release key (the
+   APK for Android, the app for macOS). Say exactly where it is. **Do not push.**
+4. When the user has tested it and said it is good: commit, `git push origin main`,
+   `git tag v1.0.2`, `git push origin v1.0.2`, then watch the run
+   (`gh run watch`) until both assets are attached.
+
+The tag is what publishes — the release workflow builds the signed APK on Linux
+and the DMG on macOS and attaches both to a GitHub Release.
 
 Notes:
 

@@ -6,6 +6,7 @@ import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../services/backup.dart';
 import '../../services/backup_io.dart';
+import '../../services/device_settings.dart';
 import '../../services/due_status.dart';
 import '../../services/notifications.dart';
 import '../mac_controls.dart';
@@ -55,13 +56,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Object? _error;
   bool _showBoard = false;
 
+  /// The layout preference read from this device's settings.
+  TabletLayoutMode _tabletMode = TabletLayoutMode.auto;
+
   /// Which printer the macOS sidebar has selected; `null` means the overview.
   int? _selectedPrinterId;
 
   @override
   void initState() {
     super.initState();
+    _loadDeviceSettings();
     _load();
+  }
+
+  /// Reads this device's preferences. Only the layout matters here; the digest
+  /// time is read by the reminder service when it schedules.
+  Future<void> _loadDeviceSettings() async {
+    final mode = await DeviceSettings.readTabletLayout();
+    if (!mounted) return;
+    setState(() => _tabletMode = mode);
   }
 
   Future<void> _load() async {
@@ -174,9 +187,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
     // The dashboard load reschedules the digest, so a changed time takes
-    // effect as soon as the sheet closes.
+    // effect as soon as the sheet closes; the layout is reread for the same
+    // reason.
+    await _loadDeviceSettings();
     await _load();
   }
+
+  /// Whether this screen uses the Android tablet shell: a printer list beside
+  /// the content instead of a pushed screen per printer.
+  bool get _tabletShell =>
+      isAndroid &&
+      _tabletMode.resolve(MediaQuery.sizeOf(context).shortestSide);
 
   /// Writes the whole database to a JSON file and hands it to the share sheet,
   /// which is the one "save it wherever you like" affordance available on both
@@ -253,9 +274,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _openPrinter(int printerId) async {
-    // On macOS the detail lives in the pane beside the sidebar rather than on
-    // a pushed route, so "opening" a printer is just a change of selection.
-    if (isMacOS) {
+    // On macOS and on a tablet the detail lives in the pane beside the list
+    // rather than on a pushed route, so "opening" a printer is just a change
+    // of selection.
+    if (isMacOS || _tabletShell) {
       setState(() => _selectedPrinterId = printerId);
       return;
     }
@@ -371,14 +393,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
       // macOS puts primary actions in the toolbar, never in a floating button.
-      floatingActionButton: isMacOS
+      // On a tablet the button belongs to the overview, not to a printer's
+      // pane, so it steps aside once one is selected.
+      floatingActionButton:
+          isMacOS || (_tabletShell && _selectedPrinterId != null)
           ? null
           : FloatingActionButton.extended(
               onPressed: _addPrinter,
               icon: const Icon(Icons.add),
               label: const Text('Add printer'),
             ),
-      body: isMacOS ? _buildMacBody() : _buildBody(),
+      body: isMacOS
+          ? _buildMacBody()
+          : (_tabletShell ? _buildTabletBody() : _buildBody()),
     );
 
     if (!isMacOS) return scaffold;
@@ -436,6 +463,119 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildMacContent() {
     final id = _selectedPrinterId;
     if (id == null) return _buildBody();
+    return PrinterDetailScreen(
+      key: ValueKey<int>(id),
+      printerId: id,
+      embedded: true,
+      onDeleted: () {
+        setState(() => _selectedPrinterId = null);
+        _load();
+      },
+      onChanged: _load,
+    );
+  }
+
+  /// The Android tablet shell: a printer list beside a content well, which is
+  /// the shape of the desktop app built from Material pieces instead.
+  Widget _buildTabletBody() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _buildTabletSidebar(),
+        const VerticalDivider(width: 1),
+        Expanded(child: _buildTabletContent()),
+      ],
+    );
+  }
+
+  Widget _buildTabletSidebar() {
+    final theme = Theme.of(context);
+    final width = (MediaQuery.sizeOf(context).width * 0.28)
+        .clamp(260.0, 340.0)
+        .toDouble();
+
+    return SizedBox(
+      width: width,
+      child: Material(
+        color: theme.colorScheme.surfaceContainerLow,
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: SectionHeader(title: 'Printers'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.print_outlined),
+              title: const Text('All printers'),
+              selected: _selectedPrinterId == null,
+              trailing: _overdueCount > 0
+                  ? _SidebarCount(
+                      count: _overdueCount,
+                      color: theme.colorScheme.error,
+                      foreground: theme.colorScheme.onError,
+                    )
+                  : null,
+              onTap: () => setState(() => _selectedPrinterId = null),
+            ),
+            for (final printer in _printersList)
+              ListTile(
+                leading: const Icon(Icons.print_outlined),
+                title: Text(
+                  printer.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                selected: _selectedPrinterId == printer.id,
+                trailing: _tabletBadgeFor(printer),
+                onTap: () => setState(() => _selectedPrinterId = printer.id),
+              ),
+            const SizedBox(height: 8),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: SectionHeader(title: 'Library'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.library_books_outlined),
+              title: const Text('Maintenance tasks'),
+              onTap: _openLibrary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The count beside a printer in the tablet sidebar, in the same two states
+  /// the macOS sidebar distinguishes.
+  Widget? _tabletBadgeFor(Printer printer) {
+    final status = _statuses[printer.id!];
+    if (status == null) return null;
+    final scheme = Theme.of(context).colorScheme;
+    if (status.overdue > 0) {
+      return _SidebarCount(
+        count: status.overdue,
+        color: scheme.error,
+        foreground: scheme.onError,
+      );
+    }
+    if (status.dueSoon > 0) {
+      return _SidebarCount(
+        count: status.dueSoon,
+        color: scheme.tertiaryContainer,
+        foreground: scheme.onTertiaryContainer,
+      );
+    }
+    return null;
+  }
+
+  Widget _buildTabletContent() {
+    final id = _selectedPrinterId;
+    if (id == null) {
+      // The sidebar already lists the printers, so the overview must not
+      // repeat them; it gets the Tasks / Year Board switch instead.
+      return _buildBody(listPrinters: false, showViewToggle: true);
+    }
     return PrinterDetailScreen(
       key: ValueKey<int>(id),
       printerId: id,
@@ -576,7 +716,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
   }
 
-  Widget _buildBody() {
+  Widget _buildBody({bool? listPrinters, bool showViewToggle = false}) {
+    final withPrinters = listPrinters ?? !isMacOS;
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return ErrorView(error: _error!, onRetry: _load);
 
@@ -598,6 +739,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
         children: <Widget>[
+          if (showViewToggle) ...<Widget>[
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SegmentedButton<bool>(
+                segments: const <ButtonSegment<bool>>[
+                  ButtonSegment<bool>(
+                    value: false,
+                    label: Text('Tasks'),
+                    icon: Icon(Icons.list_alt_outlined),
+                  ),
+                  ButtonSegment<bool>(
+                    value: true,
+                    label: Text('Year Board'),
+                    icon: Icon(Icons.calendar_view_month_outlined),
+                  ),
+                ],
+                selected: <bool>{_showBoard},
+                onSelectionChanged: (selection) =>
+                    setState(() => _showBoard = selection.first),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Row(
             children: <Widget>[
               Expanded(
@@ -656,9 +820,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onLog: (p, t) => _logFor(p, t),
               onOpenPrinter: (p) => _openPrinter(p.id!),
             ),
-          ] else if (!isMacOS) ...<Widget>[
-            // macOS lists printers in the sidebar, so the overview does not
-            // repeat them here.
+          ] else if (withPrinters) ...<Widget>[
+            // macOS and the tablet shell list printers in the sidebar, so the
+            // overview does not repeat them here.
             const SizedBox(height: 24),
             SectionHeader(
               title: 'My printers',
@@ -1047,5 +1211,38 @@ class _BoardView extends StatelessWidget {
   String _fmtHours(double h) {
     if (h.abs() < 0.05) return '0.0';
     return h.toStringAsFixed(1);
+  }
+}
+
+/// The small count beside a tablet sidebar row, mirroring the badges the macOS
+/// sidebar uses: overdue and due soon, with nothing for a healthy printer.
+class _SidebarCount extends StatelessWidget {
+  const _SidebarCount({
+    required this.count,
+    required this.color,
+    required this.foreground,
+  });
+
+  final int count;
+  final Color color;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: foreground,
+        ),
+      ),
+    );
   }
 }

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../services/notifications.dart';
+import '../../services/device_settings.dart';
 import '../mac_controls.dart';
 import '../macos_theme.dart';
 import '../widgets.dart';
 
-/// Device settings, as opposed to workshop data: today, the time of the daily
-/// digest. A screen of its own so later settings have somewhere to live.
+/// Device settings, as opposed to workshop data: the time of the daily digest
+/// and, on Android, which layout to use. A screen of its own so later settings
+/// have somewhere to live.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -17,9 +18,12 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   /// The chosen time as minutes past midnight. Starts at the default so the
   /// pane paints at once, then takes the stored value when it arrives.
-  int _minutes = ReminderService.defaultDigestMinutes;
+  int _minutes = DeviceSettings.defaultDigestMinutes;
 
-  /// Set once the time is changed here, so a slow read cannot overwrite the
+  /// The layout preference; [TabletLayoutMode.auto] until the read returns.
+  TabletLayoutMode _tabletMode = TabletLayoutMode.auto;
+
+  /// Set once a value is changed here, so a slow read cannot overwrite the
   /// choice the user has just made.
   bool _touched = false;
 
@@ -30,16 +34,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _load() async {
-    final minutes = await ReminderService.readDigestMinutes();
+    final minutes = await DeviceSettings.readDigestMinutes();
+    final tabletMode = await DeviceSettings.readTabletLayout();
     if (!mounted || _touched) return;
-    setState(() => _minutes = minutes);
+    setState(() {
+      _minutes = minutes;
+      _tabletMode = tabletMode;
+    });
   }
 
   Future<void> _setMinutes(int minutes) async {
     _touched = true;
     // The picker should react at once; persistence is a small file write.
     setState(() => _minutes = minutes);
-    await ReminderService.writeDigestMinutes(minutes);
+    await DeviceSettings.writeDigestMinutes(minutes);
+  }
+
+  Future<void> _setTabletMode(TabletLayoutMode mode) async {
+    _touched = true;
+    setState(() => _tabletMode = mode);
+    await DeviceSettings.writeTabletLayout(mode);
   }
 
   /// Android uses the Material picker. macOS does not: a clock dial is not an
@@ -141,6 +155,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
+          if (isAndroid) ...<Widget>[
+            const SizedBox(height: 24),
+            const SectionHeader(title: 'Layout'),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.tablet_android_outlined),
+              title: const Text('Tablet layout'),
+              subtitle: const Text(
+                'A printer list beside the content, instead of a screen per '
+                'printer.',
+              ),
+              trailing: DropdownButton<TabletLayoutMode>(
+                value: _tabletMode,
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                borderRadius: BorderRadius.circular(6),
+                items: const <DropdownMenuItem<TabletLayoutMode>>[
+                  DropdownMenuItem<TabletLayoutMode>(
+                    value: TabletLayoutMode.auto,
+                    child: Text('Automatic'),
+                  ),
+                  DropdownMenuItem<TabletLayoutMode>(
+                    value: TabletLayoutMode.always,
+                    child: Text('Always'),
+                  ),
+                  DropdownMenuItem<TabletLayoutMode>(
+                    value: TabletLayoutMode.never,
+                    child: Text('Never'),
+                  ),
+                ],
+                onChanged: (mode) {
+                  if (mode != null) _setTabletMode(mode);
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Automatic switches when the shorter side of the screen is '
+              '600 dp or more.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ],
       ),
     );

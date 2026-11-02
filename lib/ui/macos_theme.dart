@@ -8,6 +8,10 @@ import 'package:flutter/material.dart';
 /// widgets do.
 bool get isMacOS => defaultTargetPlatform == TargetPlatform.macOS;
 
+/// True when the running app is an Android build. The tablet shell is an
+/// Android-only arrangement for now.
+bool get isAndroid => defaultTargetPlatform == TargetPlatform.android;
+
 /// The fill behind the small chips the macOS printer pane is built from.
 ///
 /// Android draws those as a tint on a large Material surface, and does here

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:printer_maintenance/data/models.dart';
+import 'package:printer_maintenance/services/device_settings.dart';
 import 'package:printer_maintenance/services/due_status.dart';
 import 'package:printer_maintenance/services/notifications.dart';
 
@@ -167,7 +168,7 @@ void main() {
         DateTime(year, month, day, hour, minute);
 
     test('the default delivery time is 09:00', () {
-      expect(ReminderService.defaultDigestMinutes, 9 * 60);
+      expect(DeviceSettings.defaultDigestMinutes, 9 * 60);
     });
 
     test('later today, when the time has not come round yet', () {
@@ -220,20 +221,20 @@ void main() {
     });
   });
 
-  group('ReminderService.normaliseDigestMinutes', () {
+  group('DeviceSettings.normaliseDigestMinutes', () {
     test('keeps either end of the day', () {
-      expect(ReminderService.normaliseDigestMinutes(0), 0);
-      expect(ReminderService.normaliseDigestMinutes(23 * 60 + 59), 23 * 60 + 59);
+      expect(DeviceSettings.normaliseDigestMinutes(0), 0);
+      expect(DeviceSettings.normaliseDigestMinutes(23 * 60 + 59), 23 * 60 + 59);
     });
 
     test('falls back to the default for missing, unparseable or absurd '
         'values', () {
-      const fallback = ReminderService.defaultDigestMinutes;
-      expect(ReminderService.normaliseDigestMinutes(null), fallback);
-      expect(ReminderService.normaliseDigestMinutes(-1), fallback);
-      expect(ReminderService.normaliseDigestMinutes(24 * 60), fallback);
+      const fallback = DeviceSettings.defaultDigestMinutes;
+      expect(DeviceSettings.normaliseDigestMinutes(null), fallback);
+      expect(DeviceSettings.normaliseDigestMinutes(-1), fallback);
+      expect(DeviceSettings.normaliseDigestMinutes(24 * 60), fallback);
       expect(
-        ReminderService.normaliseDigestMinutes(int.tryParse('not a time')),
+        DeviceSettings.normaliseDigestMinutes(int.tryParse('not a time')),
         fallback,
       );
     });

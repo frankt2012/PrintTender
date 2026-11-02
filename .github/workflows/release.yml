@@ -126,10 +126,54 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Tags are needed to link the previous release in the notes.
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
+
+      - name: Compose the release notes from CHANGELOG.md
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+
+          awk -v ver="$version" '
+            index($0, "## [" ver "]") == 1 { inside = 1; next }
+            inside && index($0, "## [") == 1 { exit }
+            inside { print }
+          ' CHANGELOG.md > changelog-entry.md
+
+          if ! grep -q '[^[:space:]]' changelog-entry.md; then
+            echo "::error::CHANGELOG.md has no entry for $version. Add one before tagging."
+            exit 1
+          fi
+
+          # Drop the blank line(s) around the heading so the body starts clean.
+          sed -i '/./,$!d' changelog-entry.md
+
+          {
+            echo "## What's new in $version"
+            echo
+            cat changelog-entry.md
+            echo
+            cat .github/release-footer.md
+            echo
+            echo "## Checksums"
+            echo
+            echo '```'
+            sha256sum PrintTender-*
+            echo '```'
+          } > release-body.md
+
+          previous=$(git tag --sort=-v:refname | grep -vx "$GITHUB_REF_NAME" | head -1 || true)
+          if [ -n "$previous" ]; then
+            echo
+            echo "**Full changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${GITHUB_REF_NAME}"
+          fi >> release-body.md
+
+          cat release-body.md
 
       - name: Attach the installers to a GitHub Release
         env:
@@ -139,9 +183,10 @@ jobs:
           ls -l PrintTender-*
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" PrintTender-*.apk PrintTender-*.dmg --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes-file release-body.md
           else
             gh release create "$GITHUB_REF_NAME" \
               --title "PrintTender ${GITHUB_REF_NAME#v}" \
-              --generate-notes \
+              --notes-file release-body.md \
               PrintTender-*.apk PrintTender-*.dmg
           fi

@@ -64,8 +64,13 @@ does not recognise.
   source list of printers beside a content well, the menus are in the menu bar
   with keyboard shortcuts, the add/edit/picker flows are sheets, and the window
   has a unified title bar. See [The macOS app](#the-macos-app).
+- **A tablet layout on Android** — from 600 dp on the shorter side the phone
+  screens give way to a printer list beside the content: a printer opens in the
+  pane instead of a new screen, and the year board fits. Settings can force the
+  layout on or off for testing.
 - **Year board** — a calendar grid of the year's maintenance, on the desktop
-  targets only, showing what was logged when and what the schedules have coming.
+  targets and on Android tablets, showing what was logged when and what the
+  schedules have coming.
 
 ## Screenshots
 
@@ -238,8 +243,10 @@ is the expected state of a personal app.
 
 Pushing a tag publishes installers. The [release workflow](.github/workflows/release.yml)
 builds the signed APK on Linux and the DMG on a macOS runner, then attaches both to a
-GitHub Release named after the tag. Versions in the file names come from `pubspec.yaml`,
-so bump `version:` before tagging:
+GitHub Release named after the tag. Each release's notes are written from
+[`CHANGELOG.md`](CHANGELOG.md) — the entry for the version must exist before the tag is
+pushed — together with the install steps and the SHA-256 checksums. Versions in the
+file names come from `pubspec.yaml`, so bump `version:` before tagging:
 
 ```bash
 git tag v1.0.1 && git push origin v1.0.1
@@ -268,7 +275,7 @@ gh release create v1.0.1 --title "PrintTender 1.0.1" PrintTender-1.0.1.dmg \
 
 ```bash
 flutter analyze     # static analysis, currently clean
-flutter test        # 86 tests, all passing
+flutter test        # 88 tests, all passing
 ```
 
 Coverage:
