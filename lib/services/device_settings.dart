@@ -45,6 +45,9 @@ abstract final class DeviceSettings {
   static const String _digestTimeFile = 'digest_time';
   static const String _tabletLayoutFile = 'tablet_layout';
   static const String _askedFile = 'reminders_asked';
+  static const String _batteryAskedFile = 'battery_asked';
+  static const String _autoUpdateFile = 'updates_auto';
+  static const String _updateCheckedFile = 'updates_checked';
 
   /// The folder is named after the reminders it started with; treat it as this
   /// device's state.
@@ -123,5 +126,64 @@ abstract final class DeviceSettings {
     final directory = await stateDirectory();
     await directory.create(recursive: true);
     await File(p.join(directory.path, _askedFile)).writeAsString('asked');
+  }
+
+  /// Whether the battery-optimisation explanation has already been shown. It is
+  /// a one-time nudge; the Settings row stays as the way back to it.
+  static Future<bool> batteryPromptAsked() async {
+    final file = File(p.join((await stateDirectory()).path, _batteryAskedFile));
+    return file.exists();
+  }
+
+  static Future<void> markBatteryPromptAsked() async {
+    final directory = await stateDirectory();
+    await directory.create(recursive: true);
+    await File(
+      p.join(directory.path, _batteryAskedFile),
+    ).writeAsString('asked');
+  }
+
+  /// Whether the app may ask GitHub for a newer release on its own. On by
+  /// default; the switch in Settings turns it off.
+  static Future<bool> autoUpdateCheck() async {
+    try {
+      final file = File(p.join((await stateDirectory()).path, _autoUpdateFile));
+      if (!await file.exists()) return true;
+      return (await file.readAsString()).trim() != 'off';
+    } catch (error) {
+      debugPrint('Settings: could not read the update preference ($error)');
+      return true;
+    }
+  }
+
+  static Future<void> writeAutoUpdateCheck(bool enabled) async {
+    final directory = await stateDirectory();
+    await directory.create(recursive: true);
+    await File(
+      p.join(directory.path, _autoUpdateFile),
+    ).writeAsString(enabled ? 'on' : 'off');
+  }
+
+  /// When the automatic check last reached GitHub successfully, or null if it
+  /// never has. A failed check deliberately does not count.
+  static Future<DateTime?> lastUpdateCheck() async {
+    try {
+      final file = File(
+        p.join((await stateDirectory()).path, _updateCheckedFile),
+      );
+      if (!await file.exists()) return null;
+      return DateTime.tryParse((await file.readAsString()).trim());
+    } catch (error) {
+      debugPrint('Settings: could not read the last update check ($error)');
+      return null;
+    }
+  }
+
+  static Future<void> writeLastUpdateCheck(DateTime when) async {
+    final directory = await stateDirectory();
+    await directory.create(recursive: true);
+    await File(
+      p.join(directory.path, _updateCheckedFile),
+    ).writeAsString(when.toIso8601String());
   }
 }

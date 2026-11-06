@@ -6,13 +6,16 @@ import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../services/backup.dart';
 import '../../services/backup_io.dart';
+import '../../services/battery_optimization.dart';
 import '../../services/device_settings.dart';
 import '../../services/due_status.dart';
 import '../../services/notifications.dart';
+import '../../services/updater.dart';
 import '../mac_controls.dart';
 import '../mac_sidebar.dart';
 import '../macos_theme.dart';
 import '../routes.dart';
+import '../update_prompt.dart';
 import '../widgets.dart';
 import 'add_log_entry_screen.dart';
 import 'edit_printer_screen.dart';
@@ -59,6 +62,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// The layout preference read from this device's settings.
   TabletLayoutMode _tabletMode = TabletLayoutMode.auto;
 
+  /// Whether this launch has already considered the one-time battery nudge.
+  bool _batteryPromptConsidered = false;
+
+  /// Whether this launch has already looked for an update.
+  bool _updateCheckStarted = false;
+
   /// Which printer the macOS sidebar has selected; `null` means the overview.
   int? _selectedPrinterId;
 
@@ -75,6 +84,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final mode = await DeviceSettings.readTabletLayout();
     if (!mounted) return;
     setState(() => _tabletMode = mode);
+  }
+
+  /// One-time nudge about Android's battery optimisation.
+  ///
+  /// The digest is an alarm, and without the exemption Android is free to defer
+  /// or kill the app before it fires — silently. Nothing can change that
+  /// without the user, so explain it once and offer the system dialog; the
+  /// Settings row stays as the way back to it.
+  Future<void> _maybeAskBattery(bool hasSchedule) async {
+    if (_batteryPromptConsidered || !hasSchedule) return;
+    _batteryPromptConsidered = true;
+    if (await DeviceSettings.batteryPromptAsked()) return;
+    final exempt = await BatteryOptimization.isIgnoring();
+    if (exempt != false) return;
+
+    await DeviceSettings.markBatteryPromptAsked();
+    if (!mounted) return;
+
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Keep reminders on time'),
+        content: const Text(
+          'Android can delay or drop the daily reminder while PrintTender is '
+          'in the background. Exempting the app from battery optimisation is '
+          'what keeps the digest reliable.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Open settings'),
+          ),
+        ],
+      ),
+    );
+    if (open == true) await BatteryOptimization.requestExemption();
+  }
+
+  /// At most one automatic update check per session, and at most one per day
+  /// across sessions. A failure is silent: this app is meant to work offline,
+  /// and a check that cannot reach GitHub is not worth interrupting anyone for.
+  Future<void> _maybeCheckForUpdates() async {
+    if (_updateCheckStarted) return;
+    _updateCheckStarted = true;
+    if (!await DeviceSettings.autoUpdateCheck()) return;
+
+    final last = await DeviceSettings.lastUpdateCheck();
+    if (last != null &&
+        DateTime.now().difference(last) < const Duration(days: 1)) {
+      return;
+    }
+
+    try {
+      final update = await Updater.checkForUpdate();
+      await DeviceSettings.writeLastUpdateCheck(DateTime.now());
+      if (update != null && mounted) {
+        await showUpdatePrompt(context, update);
+      }
+    } catch (error) {
+      debugPrint('Updates: automatic check skipped ($error)');
+    }
   }
 
   Future<void> _load() async {
@@ -148,6 +222,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         attention: attention,
         hasSchedule: hasSchedule,
       );
+
+      // Ask after the notification prompt has been answered, so two dialogs
+      // never fight over the screen.
+      await _maybeAskBattery(hasSchedule);
+      await _maybeCheckForUpdates();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -182,7 +261,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       pushPage(
         (_) => const SettingsScreen(),
         maxWidth: 520,
-        maxHeight: 300,
+        maxHeight: 460,
         name: 'settings',
       ),
     );

@@ -2,7 +2,8 @@
 
 A local-first maintenance tracker for 3D printers. Runs as a **native macOS desktop
 app** and an **Android app** from a single Flutter codebase. All data lives in a
-SQLite database on the device — no account, no server, fully offline.
+SQLite database on the device — no account, no server, and it works fully offline.
+The only network use is an optional update check, which can be turned off.
 
 ## Download
 
@@ -71,6 +72,11 @@ does not recognise.
 - **Year board** — a calendar grid of the year's maintenance, on the desktop
   targets and on Android tablets, showing what was logged when and what the
   schedules have coming.
+- **Update checks** — Settings shows the installed version and can ask GitHub for
+  a newer release, automatically (at most once a day) or on demand. On Android it
+  downloads the APK and opens the system installer, which always asks for
+  confirmation; on macOS it downloads the DMG and mounts it, ready to drag onto
+  Applications.
 
 ## Screenshots
 
@@ -275,7 +281,7 @@ gh release create v1.0.1 --title "PrintTender 1.0.1" PrintTender-1.0.1.dmg \
 
 ```bash
 flutter analyze     # static analysis, currently clean
-flutter test        # 88 tests, all passing
+flutter test        # 108 tests, all passing
 ```
 
 Coverage:
@@ -567,8 +573,32 @@ Build plate on Prusa MK4 is due soon
   and a reminder does not need the second it fires in.
 - **Survives a reboot** through the plugin's boot receiver (`RECEIVE_BOOT_COMPLETED`
   in the manifest), and is re-registered every time the app opens.
+- **Battery optimisation on Android.** The digest is an alarm, and Android may
+  defer or drop it while the app is in the background. The first time a schedule
+  exists the app explains that once and offers the system exemption dialog;
+  Settings → Reliability shows whether PrintTender is exempt and can reopen it.
 - **Both platforms.** The same code path schedules the digest on Android and on
   macOS, where it has been verified end to end from a clean install.
+
+## Updates
+
+Settings → Updates shows the installed version, a **Check automatically** switch
+(on by default, at most one check a day when the app opens) and **Check now**.
+
+When a newer release exists, the app shows what is new and offers to update:
+
+- **Android** downloads the APK and hands it to the system installer. Android
+  always asks the user to confirm an update — a sideloaded app cannot install
+  silently — and the first time it also asks to allow PrintTender to install
+  apps. The APK is the release asset, signed with the same key as the installed
+  build, so it updates in place.
+- **macOS** downloads the DMG and opens it in Finder. The app is sandboxed and
+  cannot replace its own bundle, so the final step is dragging PrintTender onto
+  Applications and reopening it.
+
+The check is a single unauthenticated request to `api.github.com` for the latest
+release. Nothing else leaves the device, and with the switch off there is no
+network traffic at all.
 
 ## Notes
 

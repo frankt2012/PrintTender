@@ -7,6 +7,26 @@ All notable changes to PrintTender are documented here. The format follows
 The release workflow takes each GitHub release's body from the matching section
 below, so the entry has to exist before the tag is pushed.
 
+## [1.3.0] - 2026-11-05
+
+### Added
+
+- **A battery-optimisation reminder on Android.** The daily digest is an alarm,
+  and Android is free to defer or drop it while the app is in the background.
+  The app now explains that once and offers the system exemption dialog, and
+  Settings → Reliability shows whether PrintTender is exempt.
+- **In-app update checks.** Settings → Updates shows the installed version, a
+  switch for checking automatically (on by default, at most once a day) and a
+  Check now button. When a newer release exists, Android downloads the APK and
+  opens the system installer; macOS downloads the DMG and mounts it, since a
+  sandboxed app cannot replace itself.
+
+### Changed
+
+- The app now makes one optional network request — `api.github.com` for the
+  latest release — when an update check runs. Nothing else leaves the device, and
+  the check can be switched off.
+
 ## [1.1.0] - 2026-11-01
 
 ### Added

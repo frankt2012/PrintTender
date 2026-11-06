@@ -11,5 +11,8 @@
 	<!-- Needed so the sandbox lets the backup import panel hand us a file. -->
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
+	<!-- The updater asks GitHub for the latest release. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
 </dict>
 </plist>

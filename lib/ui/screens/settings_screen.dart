@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../services/battery_optimization.dart';
 import '../../services/device_settings.dart';
+import '../../services/updater.dart';
 import '../mac_controls.dart';
 import '../macos_theme.dart';
+import '../update_prompt.dart';
 import '../widgets.dart';
 
 /// Device settings, as opposed to workshop data: the time of the daily digest
@@ -15,13 +18,30 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with WidgetsBindingObserver {
   /// The chosen time as minutes past midnight. Starts at the default so the
   /// pane paints at once, then takes the stored value when it arrives.
   int _minutes = DeviceSettings.defaultDigestMinutes;
 
   /// The layout preference; [TabletLayoutMode.auto] until the read returns.
   TabletLayoutMode _tabletMode = TabletLayoutMode.auto;
+
+  /// Whether Android exempts the app from battery optimisation. Null until the
+  /// platform answers, and null where the setting does not exist.
+  bool? _batteryExempt;
+
+  /// The installed version, for the Updates row.
+  String? _version;
+
+  /// Whether the app may ask GitHub for a newer release on its own.
+  bool _autoUpdate = true;
+
+  /// A manual check is in flight.
+  bool _checking = false;
+
+  /// The outcome of the last manual check.
+  String? _updateStatus;
 
   /// Set once a value is changed here, so a slow read cannot overwrite the
   /// choice the user has just made.
@@ -30,7 +50,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+    _loadBattery();
+    _loadUpdates();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Returning from the system exemption dialog: re-read the answer.
+    if (state == AppLifecycleState.resumed) _loadBattery();
+  }
+
+  Future<void> _loadBattery() async {
+    final exempt = await BatteryOptimization.isIgnoring();
+    if (!mounted) return;
+    setState(() => _batteryExempt = exempt);
+  }
+
+  Future<void> _requestBatteryExemption() async {
+    await BatteryOptimization.requestExemption();
+    await _loadBattery();
+  }
+
+  Future<void> _loadUpdates() async {
+    final auto = await DeviceSettings.autoUpdateCheck();
+    final version = await Updater.currentVersionLabel();
+    if (!mounted) return;
+    setState(() {
+      _autoUpdate = auto;
+      _version = version;
+    });
+  }
+
+  Future<void> _setAutoUpdate(bool enabled) async {
+    setState(() => _autoUpdate = enabled);
+    await DeviceSettings.writeAutoUpdateCheck(enabled);
+  }
+
+  Future<void> _checkForUpdates() async {
+    setState(() {
+      _checking = true;
+      _updateStatus = null;
+    });
+    try {
+      final update = await Updater.checkForUpdate();
+      if (!mounted) return;
+      if (update == null) {
+        setState(() {
+          _checking = false;
+          _updateStatus = 'You are on the latest version.';
+        });
+        return;
+      }
+      setState(() => _checking = false);
+      await showUpdatePrompt(context, update);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _checking = false;
+        _updateStatus = 'Could not check right now. Try again later.';
+      });
+    }
   }
 
   Future<void> _load() async {
@@ -194,6 +281,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Text(
               'Automatic switches when the shorter side of the screen is '
               '600 dp or more.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (_batteryExempt != null) ...<Widget>[
+              const SizedBox(height: 24),
+              const SectionHeader(title: 'Reliability'),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.battery_saver_outlined),
+                title: const Text('Battery optimisation'),
+                subtitle: Text(
+                  _batteryExempt!
+                      ? 'PrintTender is exempt, so reminders can fire while it '
+                            'is in the background.'
+                      : 'Android may delay or drop the daily reminder while '
+                            'PrintTender is in the background.',
+                ),
+                trailing: _batteryExempt!
+                    ? Icon(
+                        Icons.check_circle_outline,
+                        color: Theme.of(context).colorScheme.primary,
+                      )
+                    : TextButton(
+                        onPressed: _requestBatteryExemption,
+                        child: const Text('Fix'),
+                      ),
+              ),
+            ],
+          ],
+          const SizedBox(height: 24),
+          const SectionHeader(title: 'Updates'),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.system_update_outlined),
+            title: Text(
+              _version == null ? 'PrintTender' : 'PrintTender $_version',
+            ),
+            subtitle: const Text(
+              'Asks GitHub for the newest release. Nothing else uses the '
+              'network.',
+            ),
+            trailing: _checking
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : TextButton(
+                    onPressed: _checkForUpdates,
+                    child: const Text('Check now'),
+                  ),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            secondary: const Icon(Icons.schedule_outlined),
+            title: const Text('Check automatically'),
+            subtitle: const Text('At most once a day, when the app opens.'),
+            value: _autoUpdate,
+            onChanged: _setAutoUpdate,
+          ),
+          if (_updateStatus != null) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(
+              _updateStatus!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
