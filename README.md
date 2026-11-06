@@ -16,6 +16,14 @@ Installers are attached to the [latest release](https://github.com/frankt2012/Pr
 | macOS | `PrintTender-<version>.dmg` | macOS 12 or later, Apple Silicon or Intel |
 | Android | `PrintTender-<version>.apk` | Android 7.0 or later, arm64-v8a / armeabi-v7a / x86_64 |
 
+On macOS, Homebrew can install it (and keep it in `/Applications` like any cask):
+
+```bash
+brew tap frankt2012/printtender
+brew trust frankt2012/printtender    # third-party taps are untrusted by default
+brew install --cask printtender
+```
+
 ### macOS: the first launch needs one extra step
 
 The app is not notarized — there is no Apple Developer ID behind it — so macOS

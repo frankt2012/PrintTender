@@ -19,6 +19,9 @@ explicit go-ahead → push, tag, release.
 4. When the user has tested it and said it is good: commit, `git push origin main`,
    `git tag v1.0.2`, `git push origin v1.0.2`, then watch the run
    (`gh run watch`) until both assets are attached.
+5. Update the Homebrew tap: set `version` and the new DMG's `sha256` in
+   `Casks/printtender.rb` of `frankt2012/homebrew-printtender`, then push. The README's
+   Homebrew instructions point at that tap.
 
 The tag is what publishes — the release workflow builds the signed APK on Linux
 and the DMG on macOS and attaches both to a GitHub Release.
