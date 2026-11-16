@@ -56,7 +56,8 @@ does not recognise.
 - **Maintenance library** — 58 reusable task definitions (nozzle, belts, lead
   screws, linear rods, carbon rods, fans, PTFE tube, wiring, lubes, filters,
   resin-specific jobs, …) in nine categories, seeded on first run and fully
-  editable. The eight essentials are ticked as defaults.
+  editable — from the library, or straight from the assign sheet. The eight
+  essentials are ticked as defaults.
 - **Per-printer schedules** — assign any library task to a printer and give it a
   trigger of *every N print hours*, *every N months*, or both.
 - **Reminders** — every schedule is graded **OK → Due soon (85% consumed) →
@@ -289,7 +290,7 @@ gh release create v1.0.1 --title "PrintTender 1.0.1" PrintTender-1.0.1.dmg \
 
 ```bash
 flutter analyze     # static analysis, currently clean
-flutter test        # 108 tests, all passing
+flutter test        # 109 tests, all passing
 ```
 
 Coverage:
@@ -584,7 +585,8 @@ Build plate on Prusa MK4 is due soon
 - **Battery optimisation on Android.** The digest is an alarm, and Android may
   defer or drop it while the app is in the background. The first time a schedule
   exists the app explains that once and offers the system exemption dialog;
-  Settings → Reliability shows whether PrintTender is exempt and can reopen it.
+  Settings → Reliability shows whether PrintTender is exempt and can reopen it,
+  and while the exemption is missing a banner on the dashboard says so.
 - **Both platforms.** The same code path schedules the digest on Android and on
   macOS, where it has been verified end to end from a clean install.
 

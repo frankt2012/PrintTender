@@ -42,7 +42,8 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   final _printers = PrinterRepository();
   final _tasks = TaskRepository();
   final _logs = LogRepository();
@@ -68,14 +69,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Whether this launch has already looked for an update.
   bool _updateCheckStarted = false;
 
+  /// Whether Android exempts the app from battery optimisation. Null while
+  /// unknown, and null where the setting does not exist.
+  bool? _batteryExempt;
+
+  /// Whether any printer has a schedule, so the digest matters.
+  bool _hasSchedule = false;
+
   /// Which printer the macOS sidebar has selected; `null` means the overview.
   int? _selectedPrinterId;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadDeviceSettings();
+    _loadBatteryState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back from the system exemption dialog, or from Settings: the
+    // banner should disappear as soon as the answer changes.
+    if (state == AppLifecycleState.resumed) _loadBatteryState();
+  }
+
+  Future<void> _loadBatteryState() async {
+    final exempt = await BatteryOptimization.isIgnoring();
+    if (!mounted) return;
+    setState(() => _batteryExempt = exempt);
+  }
+
+  Future<void> _requestBatteryExemption() async {
+    await BatteryOptimization.requestExemption();
+    await _loadBatteryState();
   }
 
   /// Reads this device's preferences. Only the layout matters here; the digest
@@ -204,6 +238,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _printerNames = names;
         _overdueCount = overdueCount;
         _totalCost = totalCost;
+        _hasSchedule = hasSchedule;
         _error = null;
         _loading = false;
         // The sidebar may be pointing at a printer that was just deleted.
@@ -818,6 +853,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
         children: <Widget>[
+          if (isAndroid && _hasSchedule && _batteryExempt == false)
+            _BatteryBanner(onFix: _requestBatteryExemption),
           if (showViewToggle) ...<Widget>[
             Align(
               alignment: Alignment.centerLeft,
@@ -1320,6 +1357,60 @@ class _SidebarCount extends StatelessWidget {
           fontSize: 12,
           fontWeight: FontWeight.w600,
           color: foreground,
+        ),
+      ),
+    );
+  }
+}
+
+/// A standing warning that Android can drop the daily digest. It stays until
+/// the app is exempt, unlike the one-time prompt that explains it.
+class _BatteryBanner extends StatelessWidget {
+  const _BatteryBanner({required this.onFix});
+
+  final VoidCallback onFix;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final ink = scheme.onTertiaryContainer;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 0,
+      color: scheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(Icons.battery_alert_outlined, size: 20, color: ink),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Reminders may not arrive',
+                    style: TextStyle(fontWeight: FontWeight.w600, color: ink),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Android can delay or drop the daily digest while PrintTender '
+              'is in the background.',
+              style: TextStyle(fontSize: 13, color: ink),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: onFix,
+                style: TextButton.styleFrom(foregroundColor: ink),
+                child: const Text('Fix'),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -6,6 +6,7 @@ import '../../services/due_status.dart';
 import '../mac_controls.dart';
 import '../macos_theme.dart';
 import '../routes.dart';
+import '../task_definition_dialog.dart';
 import '../widgets.dart';
 import 'add_log_entry_screen.dart';
 import 'edit_printer_screen.dart';
@@ -170,11 +171,6 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
 
     if (!mounted) return;
 
-    if (available.isEmpty) {
-      showSnack(context, 'Every task in the library is already assigned.');
-      return;
-    }
-
     final chosen = await showModalBottomSheet<MaintenanceTask>(
       context: context,
       showDragHandle: true,
@@ -191,6 +187,31 @@ class _PrinterDetailScreenState extends State<PrinterDetailScreen> {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
+            // Creating a task at the moment it turns out to be missing saves
+            // leaving the printer, opening the library and coming back.
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline),
+              title: const Text('New maintenance task'),
+              subtitle: const Text('Add it to the library and assign it now'),
+              onTap: () async {
+                final created = await showDialog<MaintenanceTask>(
+                  context: context,
+                  builder: (_) => const TaskDefinitionDialog(),
+                );
+                if (created != null && context.mounted) {
+                  Navigator.of(context).pop(created);
+                }
+              },
+            ),
+            const Divider(height: 1),
+            if (available.isEmpty)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Text(
+                  'Every task in the library is already assigned. Create one '
+                  'above.',
+                ),
+              ),
             ..._groupByCategory(available).entries.expand(
               (group) => <Widget>[
                 Padding(

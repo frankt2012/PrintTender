@@ -7,6 +7,17 @@ All notable changes to PrintTender are documented here. The format follows
 The release workflow takes each GitHub release's body from the matching section
 below, so the entry has to exist before the tag is pushed.
 
+## [1.4.0] - 2026-11-15
+
+### Added
+
+- **Create a task from the assign sheet.** "Assign a maintenance task" now offers
+  a "New maintenance task" entry, so a job that turns out to be missing can be
+  added and assigned without leaving the printer.
+- **A standing battery warning on Android.** While the app is not exempt from
+  battery optimisation, the dashboard shows a "Reminders may not arrive" banner
+  with a Fix button. It clears as soon as the exemption is granted.
+
 ## [1.3.0] - 2026-11-05
 
 ### Added

@@ -550,6 +550,47 @@ void main() {
     expect(find.byType(FloatingActionButton), findsOneWidget);
   });
 
+  testWidgets('a task can be created from the assign sheet', (tester) async {
+    configurePhone(tester);
+    await tester.pumpWidget(const PrinterMaintenanceApp());
+    await pumpUntil(tester, find.text('No printers yet'));
+
+    await addPrinter(tester, 'Prusa MK4');
+    await tapWhenReady(tester, find.text('Prusa MK4'));
+    await pumpUntil(tester, find.text('Nothing scheduled'));
+    await settle(tester);
+
+    await tapWhenReady(tester, find.text('Assign a maintenance task'));
+    await pumpUntil(tester, find.byType(BottomSheet));
+    await settle(tester);
+
+    await tester.tap(find.text('New maintenance task'));
+    await pumpUntil(tester, find.byType(AlertDialog));
+    await settle(tester);
+
+    await tester.enterText(
+      find
+          .descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(TextFormField),
+          )
+          .first,
+      'Clean the filament path',
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Save'),
+      ),
+    );
+    await settle(tester);
+
+    // Creating it returns to the assign flow with the new task selected, so
+    // the schedule dialog is already asking about it.
+    await pumpUntil(tester, find.text('Schedule "Clean the filament path"'));
+    expect(find.byType(AlertDialog), findsOneWidget);
+  });
+
   testWidgets('a calendar-only task hides the print-hours field and still resets',
       (tester) async {
     configurePhone(tester);
